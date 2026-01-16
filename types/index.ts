@@ -4,6 +4,7 @@ export interface Product {
     name: string;
     sku: string;
     category: string;
+    categoryId?: string; // FK to Category
     type: 'raw_material' | 'finished_good';
     description: string;
     price: number;
@@ -102,9 +103,13 @@ export interface Category {
 export interface Supplier {
     id: string;
     name: string;
+    contactPerson?: string;
     email: string;
     phone: string;
     address: string;
+    city?: string;
+    country?: string;
+    createdAt?: Date;
 }
 
 // Customer Types
@@ -147,9 +152,10 @@ export interface SalesOrder {
     tax: number;
     discount: number;
     total: number;
-    status: 'draft' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
+    status: 'Draft' | 'Confirmed' | 'Processing' | 'Completed' | 'Cancelled';
     deliveryDate?: Date;
     notes?: string;
+    orderType: 'General' | 'Tax';
     createdAt: Date;
     updatedAt: Date;
 }
@@ -164,11 +170,12 @@ export interface DeliveryOrder {
     customerName: string;
     deliveryAddress: string;
     items: EnhancedSaleItem[];
-    status: 'pending' | 'approved' | 'in_transit' | 'delivered' | 'cancelled';
+    status: 'Pending' | 'Approved' | 'In Transit' | 'Delivered' | 'Cancelled';
     deliveryDate?: Date;
     deliveredDate?: Date;
     trackingNumber?: string;
     notes?: string;
+    orderType: 'General' | 'Tax';
     createdAt: Date;
 }
 
@@ -187,11 +194,12 @@ export interface SalesInvoice {
     total: number;
     amountPaid: number;
     amountDue: number;
-    status: 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+    status: 'Draft' | 'Approved' | 'Sent' | 'Paid' | 'Partial' | 'Overdue' | 'Cancelled';
     dueDate: Date;
     paidDate?: Date;
     paymentTerms: string;
     notes?: string;
+    orderType: 'General' | 'Tax';
     createdAt: Date;
 }
 
@@ -228,4 +236,25 @@ export interface CustomerReceipt {
     referenceNumber?: string;
     notes?: string;
     createdAt: Date;
+}
+
+// User and Role Types
+export interface Role {
+    id: string;
+    name: string;
+    description?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+export interface User {
+    id: string;
+    username: string;
+    email: string;
+    password?: string;
+    roleId?: string;
+    Role?: Role;
+    isActive: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
 }

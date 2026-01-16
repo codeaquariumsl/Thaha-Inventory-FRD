@@ -2,16 +2,20 @@
 
 import Sidebar from '@/components/Sidebar';
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Search, Plus, Package, AlertTriangle } from 'lucide-react';
-import { stockMovements as initialMovements, products } from '@/data/mockData';
-import { StockMovement } from '@/types';
+// import { stockMovements as initialMovements, products } from '@/data/mockData';
+import { StockMovement, Product } from '@/types';
+import * as api from '@/lib/api';
 
 export default function StockPage() {
-    const [movements, setMovements] = useState(initialMovements);
+    const [movements, setMovements] = useState<StockMovement[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
+
+    const [user, setUser] = useState<any>(null);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -22,11 +26,47 @@ export default function StockPage() {
         reason: '',
     });
 
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            const [movementsData, productsData] = await Promise.all([
+                api.getStockMovements(),
+                api.getProducts()
+            ]);
+            setMovements(movementsData.map((m: any) => ({
+                ...m,
+                productName: m.Product ? m.Product.name : 'Unknown Product',
+                type: m.movementType === 'IN' ? 'in' : m.movementType === 'OUT' ? 'out' : 'adjustment',
+                createdAt: new Date(m.createdAt),
+                createdBy: m.User ? m.User.username : 'Unknown User'
+            })));
+            setProducts(productsData.map((p: any) => ({
+                ...p,
+                price: parseFloat(p.price) || 0,
+                cost: parseFloat(p.cost) || 0,
+                stock: parseInt(p.stockQuantity) || 0,
+                reorderLevel: parseInt(p.reorderLevel) || 0,
+                category: p.Category ? p.Category.name : 'Uncategorized',
+                createdAt: new Date(p.createdAt),
+                updatedAt: new Date(p.updatedAt)
+            })));
+        } catch (error) {
+            console.error("Failed to load stock data", error);
+        }
+    };
+
     // Filter movements
     const filteredMovements = useMemo(() => {
         return movements.filter(movement => {
-            const matchesSearch = movement.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                movement.reference.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesSearch = movement.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                movement.reference?.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesType = typeFilter === 'all' || movement.type === typeFilter;
             return matchesSearch && matchesType;
         });
@@ -47,7 +87,7 @@ export default function StockPage() {
             outOfStockCount,
             stockValue,
         };
-    }, []);
+    }, [products]);
 
     const handleOpenModal = () => {
         setFormData({
@@ -64,26 +104,33 @@ export default function StockPage() {
         setIsModalOpen(false);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const product = products.find(p => p.id === formData.productId);
+        if (!user) {
+            alert('User not authenticated');
+            return;
+        }
+        const product = products.find(p => Number(p.id) === parseInt(formData.productId));
         if (!product) return;
 
-        const newMovement: StockMovement = {
-            id: Date.now().toString(),
-            productId: formData.productId,
-            productName: product.name,
-            type: formData.type,
+        const backendType = formData.type === 'in' ? 'IN' : formData.type === 'out' ? 'OUT' : 'ADJ';
+
+        const payload = {
+            productId: parseInt(formData.productId),
+            movementType: backendType,
             quantity: parseInt(formData.quantity),
             reference: formData.reference,
             reason: formData.reason,
-            createdAt: new Date(),
-            createdBy: 'Admin',
+            userId: user.id,
         };
-
-        setMovements([newMovement, ...movements]);
-        handleCloseModal();
+        try {
+            await api.createStockMovement(payload);
+            loadData();
+            handleCloseModal();
+        } catch (error: any) {
+            alert('Failed to record movement: ' + error.message);
+        }
     };
 
     return (
@@ -94,8 +141,8 @@ export default function StockPage() {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                     <div>
-                        <h1 className="text-4xl font-bold text-white mb-2">Stock Management</h1>
-                        <p className="text-gray-400">Monitor and manage your inventory levels</p>
+                        <h1 className="text-4xl font-bold text-theme-primary mb-2">Stock Management</h1>
+                        <p className="text-theme-secondary">Monitor and manage your inventory levels</p>
                     </div>
                     <button
                         onClick={handleOpenModal}
@@ -111,8 +158,8 @@ export default function StockPage() {
                     <div className="stat-card">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-400 font-medium mb-2">Total Products</p>
-                                <h3 className="text-3xl font-bold text-white">{stockStats.totalProducts}</h3>
+                                <p className="text-sm text-theme-secondary font-medium mb-2">Total Products</p>
+                                <h3 className="text-3xl font-bold text-theme-primary">{stockStats.totalProducts}</h3>
                             </div>
                             <Package className="w-8 h-8 text-primary-400" />
                         </div>
@@ -121,9 +168,9 @@ export default function StockPage() {
                     <div className="stat-card">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-400 font-medium mb-2">Total Stock</p>
-                                <h3 className="text-3xl font-bold text-white">{stockStats.totalStock}</h3>
-                                <p className="text-xs text-gray-500">units</p>
+                                <p className="text-sm text-theme-secondary font-medium mb-2">Total Stock</p>
+                                <h3 className="text-3xl font-bold text-theme-primary">{stockStats.totalStock}</h3>
+                                <p className="text-xs text-theme-secondary">units</p>
                             </div>
                             <TrendingUp className="w-8 h-8 text-green-400" />
                         </div>
@@ -132,7 +179,7 @@ export default function StockPage() {
                     <div className="stat-card">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-400 font-medium mb-2">Low Stock Items</p>
+                                <p className="text-sm text-theme-secondary font-medium mb-2">Low Stock Items</p>
                                 <h3 className="text-3xl font-bold text-yellow-400">{stockStats.lowStockCount}</h3>
                             </div>
                             <AlertTriangle className="w-8 h-8 text-yellow-400" />
@@ -142,9 +189,9 @@ export default function StockPage() {
                     <div className="stat-card">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-400 font-medium mb-2">Stock Value</p>
-                                <h3 className="text-3xl font-bold text-white">
-                                    ${stockStats.stockValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-sm text-theme-secondary font-medium mb-2">Stock Value</p>
+                                <h3 className="text-3xl font-bold text-theme-primary">
+                                    LKR {stockStats.stockValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </h3>
                             </div>
                             <TrendingUp className="w-8 h-8 text-accent-400" />
@@ -154,7 +201,7 @@ export default function StockPage() {
 
                 {/* Current Stock Levels */}
                 <div className="glass-card p-6 mb-6 animate-slide-up">
-                    <h2 className="text-xl font-bold text-white mb-6">Current Stock Levels</h2>
+                    <h2 className="text-xl font-bold text-theme-primary mb-6">Current Stock Levels</h2>
                     <div className="table-container">
                         <table className="data-table">
                             <thead>
@@ -172,7 +219,7 @@ export default function StockPage() {
                             <tbody>
                                 {products.map((product) => {
                                     const stockValue = product.stock * product.cost;
-                                    const stockPercentage = (product.stock / product.reorderLevel) * 100;
+                                    // const stockPercentage = (product.stock / product.reorderLevel) * 100;
 
                                     return (
                                         <tr key={product.id}>
@@ -181,18 +228,18 @@ export default function StockPage() {
                                             <td>{product.category}</td>
                                             <td>
                                                 <span className={`font-bold ${product.stock === 0 ? 'text-red-400' :
-                                                        product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'
+                                                    product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'
                                                     }`}>
                                                     {product.stock}
                                                 </span>
                                             </td>
                                             <td>{product.reorderLevel}</td>
-                                            <td>${product.cost.toFixed(2)}</td>
-                                            <td className="font-semibold">${stockValue.toFixed(2)}</td>
+                                            <td>LKR {product.cost.toFixed(2)}</td>
+                                            <td className="font-semibold">LKR {stockValue.toFixed(2)}</td>
                                             <td>
                                                 <span className={`badge ${product.stock === 0 ? 'badge-danger' :
-                                                        product.stock <= product.reorderLevel / 2 ? 'badge-warning' :
-                                                            product.stock <= product.reorderLevel ? 'badge-info' : 'badge-success'
+                                                    product.stock <= product.reorderLevel / 2 ? 'badge-warning' :
+                                                        product.stock <= product.reorderLevel ? 'badge-info' : 'badge-success'
                                                     }`}>
                                                     {product.stock === 0 ? 'Out of Stock' :
                                                         product.stock <= product.reorderLevel / 2 ? 'Critical' :
@@ -209,12 +256,12 @@ export default function StockPage() {
 
                 {/* Stock Movements */}
                 <div className="glass-card p-6 animate-slide-up">
-                    <h2 className="text-xl font-bold text-white mb-6">Stock Movements</h2>
+                    <h2 className="text-xl font-bold text-theme-primary mb-6">Stock Movements</h2>
 
                     {/* Filters */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
                             <input
                                 type="text"
                                 placeholder="Search movements..."
@@ -264,7 +311,7 @@ export default function StockPage() {
                                                     <Package className="w-4 h-4 text-blue-400" />
                                                 )}
                                                 <span className={`badge ${movement.type === 'in' ? 'badge-success' :
-                                                        movement.type === 'out' ? 'badge-danger' : 'badge-info'
+                                                    movement.type === 'out' ? 'badge-danger' : 'badge-info'
                                                     }`}>
                                                     {movement.type === 'in' ? 'Stock In' :
                                                         movement.type === 'out' ? 'Stock Out' : 'Adjustment'}
@@ -273,14 +320,14 @@ export default function StockPage() {
                                         </td>
                                         <td>
                                             <span className={`font-bold ${movement.type === 'in' ? 'text-green-400' :
-                                                    movement.type === 'out' ? 'text-red-400' : 'text-blue-400'
+                                                movement.type === 'out' ? 'text-red-400' : 'text-blue-400'
                                                 }`}>
                                                 {movement.type === 'in' ? '+' : movement.type === 'out' ? '-' : ''}
                                                 {movement.quantity}
                                             </span>
                                         </td>
                                         <td>{movement.reference}</td>
-                                        <td className="text-gray-400">{movement.reason}</td>
+                                        <td className="text-theme-secondary">{movement.reason}</td>
                                         <td>{movement.createdBy}</td>
                                     </tr>
                                 ))}
@@ -291,8 +338,8 @@ export default function StockPage() {
                     {filteredMovements.length === 0 && (
                         <div className="text-center py-12">
                             <Package className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-gray-400 mb-2">No movements found</h3>
-                            <p className="text-gray-500">Try adjusting your search or filters</p>
+                            <h3 className="text-xl font-bold text-theme-secondary mb-2">No movements found</h3>
+                            <p className="text-theme-secondary">Try adjusting your search or filters</p>
                         </div>
                     )}
                 </div>
@@ -301,7 +348,7 @@ export default function StockPage() {
                 <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Record Stock Movement">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-theme-secondary mb-2">
                                 Product *
                             </label>
                             <select
@@ -321,7 +368,7 @@ export default function StockPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">
                                     Movement Type *
                                 </label>
                                 <select
@@ -337,7 +384,7 @@ export default function StockPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">
                                     Quantity *
                                 </label>
                                 <input
@@ -353,7 +400,7 @@ export default function StockPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-theme-secondary mb-2">
                                 Reference *
                             </label>
                             <input
@@ -367,7 +414,7 @@ export default function StockPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-theme-secondary mb-2">
                                 Reason *
                             </label>
                             <textarea

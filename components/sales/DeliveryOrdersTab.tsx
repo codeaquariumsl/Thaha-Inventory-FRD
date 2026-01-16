@@ -1,21 +1,30 @@
 'use client';
 
+import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
 import { Plus, Search, Eye, Truck, CheckCircle, Trash2, FileText, CheckSquare } from 'lucide-react';
-import { deliveryOrders as initialDeliveries, customers, salesOrders, salesInvoices } from '@/data/salesData';
-import { products } from '@/data/mockData';
-import { DeliveryOrder, EnhancedSaleItem, SalesInvoice } from '@/types';
+import { DeliveryOrder, EnhancedSaleItem, SalesInvoice, Customer, SalesOrder, Product } from '@/types';
+import * as api from '@/lib/api';
+// Remove mock data imports to avoid unused variable errors if we are deleting them later or simply comment them out if we might fallback
+// import { deliveryOrders as initialDeliveries, customers, salesOrders, salesInvoices } from '@/data/salesData';
+// import { products } from '@/data/mockData';
 
 export default function DeliveryOrdersTab() {
-    const [deliveries, setDeliveries] = useState(initialDeliveries);
+    const [deliveries, setDeliveries] = useState<DeliveryOrder[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [viewingDelivery, setViewingDelivery] = useState<DeliveryOrder | null>(null);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+    // Additional state for fetching other data
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+
     // Form state for creating delivery order
+    const [user, setUser] = useState<any>(null);
+
     const [formData, setFormData] = useState({
         customerId: '',
         salesOrderId: '',
@@ -23,17 +32,70 @@ export default function DeliveryOrdersTab() {
         deliveryDate: '',
         trackingNumber: '',
         notes: '',
+        orderType: 'General' as 'General' | 'Tax',
     });
+
+    const canAccessTax = user?.role === 'admin' || user?.role === 'tax_user';
 
     const [deliveryItems, setDeliveryItems] = useState<EnhancedSaleItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
 
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) setUser(JSON.parse(storedUser));
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            const [delData, custData, soData, prodData] = await Promise.all([
+                api.getDeliveryOrders(),
+                api.getCustomers(),
+                api.getSalesOrders(),
+                api.getProducts()
+            ]);
+
+            setDeliveries(delData.map((d: any) => {
+                const salesOrder = d.SalesOrder || {};
+                const customer = salesOrder.Customer || {};
+
+                return {
+                    ...d,
+                    id: d.id.toString(),
+                    customerId: salesOrder.customerId ? salesOrder.customerId.toString() : '',
+                    customerName: customer.name || 'Unknown',
+                    salesOrderId: d.salesOrderId ? d.salesOrderId.toString() : '',
+                    salesOrderNumber: salesOrder.orderNumber || '-',
+                    deliveryAddress: d.shippingAddress || '',
+                    items: (d.items || salesOrder.items || []).map((item: any) => ({
+                        ...item,
+                        productId: item.productId ? item.productId.toString() : '',
+                        productName: item.Product ? item.Product.name : (item.productName || 'Unknown'),
+                        uom: item.Product ? item.Product.uom : (item.uom || 'pcs'),
+                        price: parseFloat(item.price) || 0,
+                        quantity: parseInt(item.quantity) || 0,
+                        discount: parseFloat(item.discount) || 0,
+                        tax: parseFloat(item.tax) || 0,
+                        total: parseFloat(item.total) || 0,
+                    })),
+                    deliveryDate: d.deliveryDate ? new Date(d.deliveryDate) : undefined,
+                    createdAt: new Date(d.createdAt)
+                };
+            }));
+            setCustomers(custData);
+            setSalesOrders(soData);
+            setProducts(prodData);
+        } catch (error) {
+            console.error("Failed to load delivery data", error);
+        }
+    };
+
     const filteredDeliveries = useMemo(() => {
         return deliveries.filter(delivery => {
-            const matchesSearch = delivery.deliveryNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                delivery.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'all' || delivery.status === statusFilter;
+            const matchesSearch = (delivery.deliveryNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (delivery.customerName || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === 'all' || delivery.status.toLowerCase() === statusFilter.toLowerCase();
             return matchesSearch && matchesStatus;
         });
     }, [deliveries, searchTerm, statusFilter]);
@@ -46,18 +108,19 @@ export default function DeliveryOrdersTab() {
             deliveryDate: '',
             trackingNumber: '',
             notes: '',
+            orderType: 'General',
         });
         setDeliveryItems([]);
         setIsCreateModalOpen(true);
     };
 
     const handleCustomerChange = (customerId: string) => {
-        const customer = customers.find(c => c.id === customerId);
+        const customer = customers.find(c => c.id.toString() === customerId); // ID type check
         if (customer) {
             setFormData({
                 ...formData,
                 customerId,
-                deliveryAddress: `${customer.address}, ${customer.city}, ${customer.country}`,
+                deliveryAddress: `${customer.address || ''}, ${customer.city || ''}, ${customer.country || ''}`,
                 salesOrderId: '',
             });
             setDeliveryItems([]);
@@ -65,12 +128,16 @@ export default function DeliveryOrdersTab() {
     };
 
     const handleSalesOrderChange = (salesOrderId: string) => {
-        const order = salesOrders.find(o => o.id === salesOrderId);
+        const order = salesOrders.find(o => o.id.toString() === salesOrderId.toString());
         if (order) {
-            setFormData({ ...formData, salesOrderId });
+            setFormData({
+                ...formData,
+                salesOrderId,
+                orderType: order.orderType || 'General' // Inherit from sales order
+            });
             setDeliveryItems(order.items);
         } else {
-            setFormData({ ...formData, salesOrderId: '' });
+            setFormData({ ...formData, salesOrderId: '', orderType: 'General' });
             setDeliveryItems([]);
         }
     };
@@ -78,25 +145,43 @@ export default function DeliveryOrdersTab() {
     const handleAddItem = () => {
         if (!selectedProduct || !quantity) return;
 
-        const product = products.find(p => p.id === selectedProduct);
+        const product = products.find(p => p.id.toString() === selectedProduct.toString());
         if (!product) return;
 
         // Get customer-specific price if available
-        const customer = customers.find(c => c.id === formData.customerId);
-        const itemPrice = customer?.customerPrices?.[product.id] ?? product.price;
+        const customer = customers.find(c => c.id.toString() === formData.customerId);
+        let itemPrice = product.price;
+        if (customer && customer.customerPrices && customer.customerPrices[product.id]) {
+            itemPrice = customer.customerPrices[product.id];
+        }
 
         const qty = parseInt(quantity);
+        const itemTotal = qty * itemPrice;
 
-        setDeliveryItems([...deliveryItems, {
-            productId: product.id,
-            productName: product.name,
-            uom: product.uom,
-            quantity: qty,
-            price: itemPrice,
-            discount: 0,
-            tax: 0,
-            total: qty * itemPrice,
-        }]);
+        const existingItemIndex = deliveryItems.findIndex(item => item.productId === product.id.toString());
+
+        if (existingItemIndex > -1) {
+            const updatedItems = [...deliveryItems];
+            const existing = updatedItems[existingItemIndex];
+            const newQty = existing.quantity + qty;
+            updatedItems[existingItemIndex] = {
+                ...existing,
+                quantity: newQty,
+                total: newQty * existing.price // Simplification, normally recalculate tax/discount
+            };
+            setDeliveryItems(updatedItems);
+        } else {
+            setDeliveryItems([...deliveryItems, {
+                productId: product.id.toString(),
+                productName: product.name,
+                uom: product.uom,
+                quantity: qty,
+                price: itemPrice,
+                discount: 0,
+                tax: 0,
+                total: itemTotal,
+            }]);
+        }
 
         setSelectedProduct('');
         setQuantity('1');
@@ -139,7 +224,7 @@ export default function DeliveryOrdersTab() {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (deliveryItems.length === 0) {
@@ -147,116 +232,72 @@ export default function DeliveryOrdersTab() {
             return;
         }
 
-        const customer = customers.find(c => c.id === formData.customerId);
+        const customer = customers.find(c => c.id.toString() === formData.customerId);
         if (!customer) return;
 
-        const salesOrder = formData.salesOrderId ? salesOrders.find(o => o.id === formData.salesOrderId) : undefined;
+        const salesOrder = formData.salesOrderId ? salesOrders.find(o => o.id.toString() === formData.salesOrderId) : undefined;
 
-        const newDelivery: DeliveryOrder = {
-            id: Date.now().toString(),
-            deliveryNumber: `DO-2024-${String(deliveries.length + 1).padStart(3, '0')}`,
-            salesOrderId: formData.salesOrderId || '',
-            salesOrderNumber: salesOrder?.orderNumber || 'Direct Delivery',
+        const payload = {
+            salesOrderId: formData.salesOrderId || null,
             customerId: formData.customerId,
-            customerName: customer.name,
             deliveryAddress: formData.deliveryAddress,
-            items: deliveryItems,
-            status: 'pending',
-            deliveryDate: formData.deliveryDate ? new Date(formData.deliveryDate) : undefined,
-            trackingNumber: formData.trackingNumber || undefined,
+            deliveryDate: formData.deliveryDate || null,
+            trackingNumber: formData.trackingNumber,
             notes: formData.notes,
-            createdAt: new Date(),
+            orderType: formData.orderType,
+            items: deliveryItems
         };
 
-        // Persist to mock data
-        initialDeliveries.unshift(newDelivery);
-
-        setDeliveries([newDelivery, ...deliveries]);
-        setIsCreateModalOpen(false);
-    };
-
-    const handleMarkInTransit = (id: string) => {
-        // Persist to mock data
-        const delivery = initialDeliveries.find(d => d.id === id);
-        if (delivery) delivery.status = 'in_transit';
-
-        setDeliveries(deliveries.map(d =>
-            d.id === id ? { ...d, status: 'in_transit' as const } : d
-        ));
-    };
-
-    const handleMarkDelivered = (id: string) => {
-        // Persist to mock data
-        const delivery = initialDeliveries.find(d => d.id === id);
-        if (delivery) {
-            delivery.status = 'delivered';
-            delivery.deliveredDate = new Date();
+        try {
+            await api.createDeliveryOrder(payload);
+            loadData();
+            setIsCreateModalOpen(false);
+        } catch (error: any) {
+            alert('Failed to create delivery order: ' + error.message);
         }
-
-        setDeliveries(deliveries.map(d =>
-            d.id === id ? { ...d, status: 'delivered' as const, deliveredDate: new Date() } : d
-        ));
     };
 
-    const handleDelete = (id: string) => {
+    const handleMarkInTransit = async (id: string) => {
+        try {
+            await api.updateDeliveryOrder(id, { status: 'In Transit' });
+            loadData();
+        } catch (error: any) {
+            alert('Failed to update status: ' + error.message);
+        }
+    };
+
+    const handleMarkDelivered = async (id: string) => {
+        try {
+            await api.updateDeliveryOrder(id, { status: 'Delivered', deliveredDate: new Date() });
+            loadData();
+        } catch (error: any) {
+            alert('Failed to update status: ' + error.message);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this delivery order?')) {
-            // Persist to mock data
-            const index = initialDeliveries.findIndex(d => d.id === id);
-            if (index > -1) initialDeliveries.splice(index, 1);
-
-            setDeliveries(deliveries.filter(d => d.id !== id));
+            try {
+                await api.deleteDeliveryOrder(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete delivery order: ' + error.message);
+            }
         }
     };
 
-    const handleApprove = (id: string) => {
-        const delivery = deliveries.find(d => d.id === id);
-        if (!delivery) return;
-
-        // Calculate invoice totals
-        const subtotal = delivery.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-        const totalDiscount = delivery.items.reduce((sum, item) => sum + item.discount, 0);
-        const tax = delivery.items.reduce((sum, item) => sum + item.tax, 0);
-        const total = subtotal - totalDiscount + tax;
-
-        // Create new invoice automatically
-        const newInvoice: SalesInvoice = {
-            id: Date.now().toString(),
-            invoiceNumber: `INV-${new Date().getFullYear()}-${String(salesInvoices.length + 1).padStart(3, '0')}`,
-            salesOrderId: delivery.salesOrderId,
-            customerId: delivery.customerId,
-            customerName: delivery.customerName,
-            items: delivery.items,
-            subtotal,
-            tax,
-            discount: totalDiscount,
-            total,
-            amountPaid: 0,
-            amountDue: total,
-            status: 'sent', // Automatically approved/sent
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default Net 30
-            paymentTerms: 'Net 30',
-            notes: `Generated automatically from Approved Delivery Order ${delivery.deliveryNumber}`,
-            createdAt: new Date(),
-        };
-
-        // Add to global mock data so it appears in SalesInvoicesTab
-        salesInvoices.unshift(newInvoice);
-
-        // Update global mock data for delivery status
-        const globalDelivery = initialDeliveries.find(d => d.id === id);
-        if (globalDelivery) globalDelivery.status = 'approved';
-
-        // Update delivery status
-        setDeliveries(deliveries.map(d =>
-            d.id === id ? { ...d, status: 'approved' as const } : d
-        ));
-
-        alert(`Delivery Order Approved successfully!\nInvoice ${newInvoice.invoiceNumber} has been generated automatically.`);
-        console.log("Created Invoice:", newInvoice);
+    const handleApprove = async (id: string) => {
+        try {
+            await api.approveDeliveryOrder(id);
+            loadData();
+            alert('Delivery order approved and invoice created successfully');
+        } catch (error: any) {
+            alert('Failed to approve: ' + error.message);
+        }
     };
 
     const customerOrders = formData.customerId
-        ? salesOrders.filter(o => o.customerId === formData.customerId && o.status === 'confirmed')
+        ? salesOrders.filter(o => o.customerId.toString() === formData.customerId.toString() && o.status === 'Confirmed')
         : [];
 
     return (
@@ -280,15 +321,15 @@ export default function DeliveryOrdersTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Pending</p>
-                    <p className="text-2xl font-bold text-yellow-400">{deliveries.filter(d => d.status === 'pending').length}</p>
+                    <p className="text-2xl font-bold text-yellow-400">{deliveries.filter(d => d.status.toLowerCase() === 'pending').length}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-gray-400 mb-1">In Transit</p>
-                    <p className="text-2xl font-bold text-blue-400">{deliveries.filter(d => d.status === 'in_transit').length}</p>
+                    <p className="text-2xl font-bold text-blue-400">{deliveries.filter(d => d.status.toLowerCase() === 'in transit' || d.status.toLowerCase() === 'in_transit').length}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-gray-400 mb-1">Delivered</p>
-                    <p className="text-2xl font-bold text-green-400">{deliveries.filter(d => d.status === 'delivered').length}</p>
+                    <p className="text-2xl font-bold text-green-400">{deliveries.filter(d => d.status.toLowerCase() === 'delivered').length}</p>
                 </div>
             </div>
 
@@ -307,11 +348,11 @@ export default function DeliveryOrdersTab() {
                     </div>
                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
                         <option value="all">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="in_transit">In Transit</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Approved">Approved</option>
+                        <option value="In Transit">In Transit</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
                     </select>
                 </div>
             </div>
@@ -327,6 +368,7 @@ export default function DeliveryOrdersTab() {
                             <th>Items</th>
                             <th>Delivery Date</th>
                             <th>Tracking Number</th>
+                            <th>Type</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -341,12 +383,17 @@ export default function DeliveryOrdersTab() {
                                 <td>{delivery.deliveryDate ? delivery.deliveryDate.toLocaleDateString() : '-'}</td>
                                 <td>{delivery.trackingNumber || '-'}</td>
                                 <td>
-                                    <span className={`badge ${delivery.status === 'delivered' ? 'badge-success' :
-                                        delivery.status === 'in_transit' ? 'badge-info' :
-                                            delivery.status === 'approved' ? 'badge-success' :
-                                                delivery.status === 'pending' ? 'badge-warning' : 'badge-danger'
+                                    <span className={`badge ${delivery.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
+                                        {delivery.orderType}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span className={`badge ${delivery.status === 'Delivered' ? 'badge-success' :
+                                        delivery.status === 'In Transit' ? 'badge-info' :
+                                            delivery.status === 'Approved' ? 'badge-success' :
+                                                delivery.status === 'Pending' ? 'badge-warning' : 'badge-danger'
                                         }`}>
-                                        {delivery.status.replace('_', ' ')}
+                                        {delivery.status}
                                     </span>
                                 </td>
                                 <td>
@@ -354,23 +401,23 @@ export default function DeliveryOrdersTab() {
                                         <button onClick={() => { setViewingDelivery(delivery); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
                                             <Eye className="w-4 h-4 text-primary-400" />
                                         </button>
-                                        {delivery.status === 'pending' && (
+                                        {/* {delivery.status === 'Pending' && (
                                             <button onClick={() => handleApprove(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Approve">
                                                 <CheckSquare className="w-4 h-4 text-green-400" />
                                             </button>
                                         )}
-                                        {delivery.status === 'approved' && (
+                                        {delivery.status === 'Approved' && (
                                             <>
                                                 <button onClick={() => handleMarkInTransit(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Mark In Transit">
                                                     <Truck className="w-4 h-4 text-blue-400" />
                                                 </button>
                                             </>
                                         )}
-                                        {delivery.status === 'in_transit' && (
+                                        {delivery.status === 'In Transit' && (
                                             <button onClick={() => handleMarkDelivered(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Mark Delivered">
                                                 <CheckCircle className="w-4 h-4 text-green-400" />
                                             </button>
-                                        )}
+                                        )} */}
                                         <button onClick={() => handleDelete(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
                                             <Trash2 className="w-4 h-4 text-red-400" />
                                         </button>
@@ -450,6 +497,21 @@ export default function DeliveryOrdersTab() {
                                 placeholder="TRK123456789"
                             />
                         </div>
+
+                        {canAccessTax && (
+                            <div>
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">Order Type</label>
+                                <select
+                                    value={formData.orderType}
+                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
+                                    className="input-field"
+                                    disabled={!!formData.salesOrderId} // Disable if inherited from Sales Order
+                                >
+                                    <option value="General">General</option>
+                                    <option value="Tax">Tax</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     {/* Add Items (only if not from sales order) */}
@@ -480,8 +542,8 @@ export default function DeliveryOrdersTab() {
                                             return (
                                                 <option key={product.id} value={product.id}>
                                                     {product.name} - {hasCustomPrice
-                                                        ? `$${customerPrice.toFixed(2)} (Special Price, Reg: $${product.price.toFixed(2)})`
-                                                        : `$${product.price.toFixed(2)}`} | Stock: {product.stock} {product.uom}
+                                                        ? `LKR ${customerPrice.toFixed(2)} (Special Price, Reg: LKR ${product.price})`
+                                                        : `LKR ${product.price}`} | Stock: {product.stock} {product.uom}
                                                 </option>
                                             );
                                         })}
@@ -540,7 +602,7 @@ export default function DeliveryOrdersTab() {
                                                         <span className="text-theme-primary">{item.quantity}</span>
                                                     )}
                                                 </td>
-                                                <td className="text-right text-theme-secondary">${item.price.toFixed(2)}</td>
+                                                <td className="text-right text-theme-secondary">LKR {item.price.toFixed(2)}</td>
                                                 <td className="text-right">
                                                     {!formData.salesOrderId ? (
                                                         <input
@@ -552,7 +614,7 @@ export default function DeliveryOrdersTab() {
                                                             className="w-24 bg-white/5 border border-white/10 rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
-                                                        <span className="text-theme-secondary">${item.discount.toFixed(2)}</span>
+                                                        <span className="text-theme-secondary">LKR {item.discount.toFixed(2)}</span>
                                                     )}
                                                 </td>
                                                 <td className="text-right">
@@ -566,10 +628,10 @@ export default function DeliveryOrdersTab() {
                                                             className="w-24 bg-white/5 border border-white/10 rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
-                                                        <span className="text-theme-secondary">${item.tax.toFixed(2)}</span>
+                                                        <span className="text-theme-secondary">LKR {item.tax.toFixed(2)}</span>
                                                     )}
                                                 </td>
-                                                <td className="font-bold text-right text-theme-primary">${item.total.toFixed(2)}</td>
+                                                <td className="font-bold text-right text-theme-primary">LKR {item.total.toFixed(2)}</td>
                                                 {!formData.salesOrderId && (
                                                     <td className="text-center">
                                                         <button
@@ -591,7 +653,7 @@ export default function DeliveryOrdersTab() {
                                                 Subtotal:
                                             </td>
                                             <td className="font-semibold py-2 text-right text-theme-primary">
-                                                ${deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)}
+                                                LKR {deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -600,7 +662,7 @@ export default function DeliveryOrdersTab() {
                                                 Total Discount:
                                             </td>
                                             <td className="font-semibold text-yellow-400 py-2 text-right">
-                                                -${deliveryItems.reduce((sum, item) => sum + item.discount, 0).toFixed(2)}
+                                                -LKR {deliveryItems.reduce((sum, item) => sum + item.discount, 0).toFixed(2)}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -609,7 +671,7 @@ export default function DeliveryOrdersTab() {
                                                 Total Tax:
                                             </td>
                                             <td className="font-semibold text-blue-400 py-2 text-right">
-                                                +${deliveryItems.reduce((sum, item) => sum + item.tax, 0).toFixed(2)}
+                                                +LKR {deliveryItems.reduce((sum, item) => sum + item.tax, 0).toFixed(2)}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -618,7 +680,7 @@ export default function DeliveryOrdersTab() {
                                                 Grand Total:
                                             </td>
                                             <td className="font-bold text-lg text-primary-400 py-3 text-right">
-                                                ${deliveryItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                                                LKR {deliveryItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -665,12 +727,12 @@ export default function DeliveryOrdersTab() {
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Status</p>
-                                <span className={`badge ${viewingDelivery.status === 'delivered' ? 'badge-success' :
-                                    viewingDelivery.status === 'in_transit' ? 'badge-info' :
-                                        viewingDelivery.status === 'approved' ? 'badge-success' :
-                                            viewingDelivery.status === 'pending' ? 'badge-warning' : 'badge-danger'
+                                <span className={`badge ${viewingDelivery.status === 'Delivered' ? 'badge-success' :
+                                    viewingDelivery.status === 'In Transit' ? 'badge-info' :
+                                        viewingDelivery.status === 'Approved' ? 'badge-success' :
+                                            viewingDelivery.status === 'Pending' ? 'badge-warning' : 'badge-danger'
                                     }`}>
-                                    {viewingDelivery.status.replace('_', ' ')}
+                                    {viewingDelivery.status}
                                 </span>
                             </div>
                             <div className="col-span-2">
@@ -688,6 +750,33 @@ export default function DeliveryOrdersTab() {
                                 <p className="font-semibold text-theme-primary">{viewingDelivery.deliveryDate ? viewingDelivery.deliveryDate.toLocaleDateString() : '-'}</p>
                             </div>
                         </div>
+
+                        {/* Sales Order Info Section */}
+                        {/* {(viewingDelivery as any).SalesOrder && (
+                            <div className="border-t border-white/10 pt-6">
+                                <h3 className="text-lg font-semibold text-theme-primary mb-4">Sales Order Information</h3>
+                                <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-lg">
+                                    <div>
+                                        <p className="text-sm text-theme-secondary">Order Date</p>
+                                        <p className="font-semibold text-theme-primary">
+                                            {new Date((viewingDelivery as any).SalesOrder.orderDate).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-theme-secondary">Order Status</p>
+                                        <p className="font-semibold text-theme-primary">{(viewingDelivery as any).SalesOrder.status}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-theme-secondary">Total Amount</p>
+                                        <p className="font-semibold text-green-400">LKR {parseFloat((viewingDelivery as any).SalesOrder.total).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-theme-secondary">Payment State</p>
+                                        <p className="font-semibold text-theme-primary">{(viewingDelivery as any).SalesOrder.paymentStatus || 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )} */}
 
                         <div className="border-t border-white/10 pt-6">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Items</h3>
@@ -709,6 +798,51 @@ export default function DeliveryOrdersTab() {
                                 <p className="text-theme-primary">{viewingDelivery.notes}</p>
                             </div>
                         )}
+
+                        <div className="flex gap-4 pt-4 border-t border-white/10">
+                            {viewingDelivery.status === 'Pending' && (
+                                <button
+                                    onClick={() => {
+                                        handleApprove(viewingDelivery.id);
+                                        setIsViewModalOpen(false);
+                                    }}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                >
+                                    <CheckSquare className="w-5 h-5" />
+                                    Approve Delivery
+                                </button>
+                            )}
+                            {viewingDelivery.status === 'Approved' && (
+                                <button
+                                    onClick={() => {
+                                        handleMarkInTransit(viewingDelivery.id);
+                                        setIsViewModalOpen(false);
+                                    }}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                >
+                                    <Truck className="w-5 h-5" />
+                                    Mark In Transit
+                                </button>
+                            )}
+                            {viewingDelivery.status === 'In Transit' && (
+                                <button
+                                    onClick={() => {
+                                        handleMarkDelivered(viewingDelivery.id);
+                                        setIsViewModalOpen(false);
+                                    }}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                >
+                                    <CheckCircle className="w-5 h-5" />
+                                    Mark Delivered
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setIsViewModalOpen(false)}
+                                className="btn-outline flex-1"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 )}
             </Modal>

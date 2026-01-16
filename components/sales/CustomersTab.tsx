@@ -1,14 +1,14 @@
 'use client';
 
+import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
 import { Plus, Search, Eye, Edit, Trash2, UserCheck, UserX } from 'lucide-react';
-import { customers as initialCustomers } from '@/data/salesData';
-import { products } from '@/data/mockData';
-import { Customer } from '@/types';
+import { Customer, Product } from '@/types';
+import * as api from '@/lib/api';
 
 export default function CustomersTab() {
-    const [customers, setCustomers] = useState(initialCustomers);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -28,12 +28,35 @@ export default function CustomersTab() {
         customerPrices: {} as Record<string, number>,
     });
 
-    // State for pricing form
     const [pricingProductId, setPricingProductId] = useState('');
     const [pricingAmount, setPricingAmount] = useState('');
 
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            const [custData, prodData] = await Promise.all([
+                api.getCustomers(),
+                api.getProducts()
+            ]);
+            setCustomers(custData.map((c: any) => ({
+                ...c,
+                id: c.id.toString(),
+                creditLimit: parseFloat(c.creditLimit || '0'),
+                balance: parseFloat(c.currentBalance || '0'),
+                customerPrices: c.customerPrices || {},
+                createdAt: new Date(c.createdAt)
+            })));
+            setProducts(prodData);
+        } catch (error) {
+            console.error("Failed to load customers", error);
+        }
+    };
+
     const filteredCustomers = useMemo(() => {
-        return customers.filter(customer => {
+        return customers.filter((customer: Customer) => {
             const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 customer.phone.includes(searchTerm);
@@ -75,43 +98,56 @@ export default function CustomersTab() {
         setIsModalOpen(true);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const customerData: Customer = {
-            id: editingCustomer?.id || Date.now().toString(),
+        const payload = {
             name: formData.name,
             email: formData.email,
             phone: formData.phone,
             address: formData.address,
             city: formData.city,
             country: formData.country,
-            taxId: formData.taxId || undefined,
+            taxId: formData.taxId || null,
             creditLimit: parseFloat(formData.creditLimit),
             customerPrices: formData.customerPrices,
-            balance: editingCustomer?.balance || 0,
-            status: editingCustomer?.status || 'active',
-            createdAt: editingCustomer?.createdAt || new Date(),
+            // Status and balance handled by defaults or separate logic
         };
 
-        if (editingCustomer) {
-            setCustomers(customers.map(c => c.id === editingCustomer.id ? customerData : c));
-        } else {
-            setCustomers([customerData, ...customers]);
+        try {
+            if (editingCustomer) {
+                await api.updateCustomer(editingCustomer.id, payload);
+            } else {
+                await api.createCustomer(payload);
+            }
+            loadData();
+            setIsModalOpen(false);
+        } catch (error: any) {
+            alert('Failed to save customer: ' + error.message);
         }
-
-        setIsModalOpen(false);
     };
 
-    const handleToggleStatus = (id: string) => {
-        setCustomers(customers.map(c =>
-            c.id === id ? { ...c, status: c.status === 'active' ? 'inactive' as const : 'active' as const } : c
-        ));
+    const handleToggleStatus = async (id: string) => {
+        const customer = customers.find(c => c.id === id);
+        if (customer) {
+            const newStatus = customer.status === 'active' ? 'inactive' : 'active';
+            try {
+                await api.updateCustomer(id, { status: newStatus });
+                loadData();
+            } catch (error: any) {
+                alert('Failed to update status: ' + error.message);
+            }
+        }
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this customer?')) {
-            setCustomers(customers.filter(c => c.id !== id));
+            try {
+                await api.deleteCustomer(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete customer: ' + error.message);
+            }
         }
     };
 
@@ -168,7 +204,7 @@ export default function CustomersTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Balance</p>
-                    <p className="text-2xl font-bold text-theme-primary">${customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-theme-primary">LKR {customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</p>
                 </div>
             </div>
 
@@ -215,9 +251,9 @@ export default function CustomersTab() {
                                 <td>{customer.email}</td>
                                 <td>{customer.phone}</td>
                                 <td>{customer.city}, {customer.country}</td>
-                                <td className="font-semibold">${customer.creditLimit.toLocaleString()}</td>
+                                <td className="font-semibold">LKR {customer.creditLimit.toLocaleString()}</td>
                                 <td className={`font-bold ${customer.balance > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                    ${customer.balance.toFixed(2)}
+                                    LKR {customer.balance.toFixed(2)}
                                 </td>
                                 <td>
                                     <span className={`badge ${customer.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
@@ -358,7 +394,7 @@ export default function CustomersTab() {
                         </div>
 
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-theme-secondary mb-2">Credit Limit ($) *</label>
+                            <label className="block text-sm font-medium text-theme-secondary mb-2">Credit Limit (LKR) *</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -390,7 +426,7 @@ export default function CustomersTab() {
                                             value={product.id}
                                             disabled={!!formData.customerPrices[product.id]}
                                         >
-                                            {product.name} (Reg: ${product.price.toFixed(2)})
+                                            {product.name} (Reg: LKR {product.price})
                                         </option>
                                     ))}
                                 </select>
@@ -434,9 +470,9 @@ export default function CustomersTab() {
                                                 <tr key={productId}>
                                                     <td className="py-2 text-theme-primary">{product.name}</td>
                                                     <td className="py-2 text-theme-secondary text-sm decoration-slate-500 line-through">
-                                                        ${product.price.toFixed(2)}
+                                                        LKR {product.price.toFixed(2)}
                                                     </td>
-                                                    <td className="py-2 text-green-400 font-bold">${price.toFixed(2)}</td>
+                                                    <td className="py-2 text-green-400 font-bold">LKR {price.toFixed(2)}</td>
                                                     <td className="py-2">
                                                         <button
                                                             type="button"
@@ -502,18 +538,18 @@ export default function CustomersTab() {
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Credit Limit</p>
-                                <p className="font-semibold text-theme-primary">${viewingCustomer.creditLimit.toLocaleString()}</p>
+                                <p className="font-semibold text-theme-primary">LKR {viewingCustomer.creditLimit.toLocaleString()}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Current Balance</p>
                                 <p className={`font-semibold ${viewingCustomer.balance > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                    ${viewingCustomer.balance.toFixed(2)}
+                                    LKR {viewingCustomer.balance.toFixed(2)}
                                 </p>
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Available Credit</p>
                                 <p className="font-semibold text-green-400">
-                                    ${(viewingCustomer.creditLimit - viewingCustomer.balance).toFixed(2)}
+                                    LKR {(viewingCustomer.creditLimit - viewingCustomer.balance).toFixed(2)}
                                 </p>
                             </div>
                             <div>
@@ -542,6 +578,34 @@ export default function CustomersTab() {
                                 />
                             </div>
                         </div>
+
+                        {/* Special Pricing List */}
+                        {viewingCustomer.customerPrices && Object.keys(viewingCustomer.customerPrices).length > 0 && (
+                            <div className="border-t border-white/10 pt-6">
+                                <h3 className="text-lg font-semibold text-theme-primary mb-4">Special Pricing</h3>
+                                <div className="table-container max-h-60 overflow-y-auto">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th className="text-right">Custom Price</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Object.entries(viewingCustomer.customerPrices).map(([productId, price]) => {
+                                                const product = products.find(p => p.id === productId);
+                                                return (
+                                                    <tr key={productId}>
+                                                        <td className="text-theme-primary">{product ? product.name : 'Unknown Product'}</td>
+                                                        <td className="text-right font-bold text-green-400">LKR {price.toFixed(2)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </Modal>

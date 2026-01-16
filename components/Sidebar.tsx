@@ -11,8 +11,13 @@ import {
     Menu,
     X,
     Sun,
-    Moon
+    Moon,
+    Users,
+    UserCircle,
+    LogOut,
+    Shield
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 const navigation = [
@@ -21,19 +26,27 @@ const navigation = [
     { name: 'Sales', href: '/sales', icon: ShoppingCart },
     { name: 'Purchases', href: '/purchases', icon: ShoppingBag },
     { name: 'Stock', href: '/stock', icon: TrendingUp },
+    { name: 'Users', href: '/users', icon: Users },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    const [user, setUser] = useState<any>(null);
 
-    // Load theme from localStorage on mount
+    // Load theme and user from localStorage on mount
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
         if (savedTheme) {
             setTheme(savedTheme);
             document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
         }
     }, []);
 
@@ -42,6 +55,12 @@ export default function Sidebar() {
         setTheme(newTheme);
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
     };
 
     return (
@@ -72,14 +91,19 @@ export default function Sidebar() {
                         <Package className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold gradient-text">InventoryPro</h1>
+                        <h1 className="text-xl font-bold gradient-text">CA Inventory</h1>
                         <p className="text-xs text-gray-400">Management System</p>
                     </div>
                 </div>
 
                 {/* Navigation */}
                 <nav className="flex-1 flex flex-col gap-2">
-                    {navigation.map((item) => {
+                    {navigation.filter(item => {
+                        if (item.name === 'Users') {
+                            return user?.role?.toLowerCase() === 'admin';
+                        }
+                        return true;
+                    }).map((item) => {
                         const isActive = pathname === item.href;
                         const Icon = item.icon;
 
@@ -126,14 +150,23 @@ export default function Sidebar() {
                     </button>
 
                     {/* User Info */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-accent-500 to-primary-500 rounded-full flex items-center justify-center text-white font-semibold">
-                            A
-                        </div>
-                        <div>
-                            <p className="text-sm font-semibold text-white">Admin User</p>
-                            <p className="text-xs text-gray-400">admin@inventorypro.com</p>
-                        </div>
+                    <div className="border-t border-white/10 pt-4 mt-2">
+                        <Link href="/profile" className="flex items-center gap-3 hover:bg-white/5 p-2 rounded-lg transition-colors mb-2">
+                            <div className="w-10 h-10 bg-gradient-to-br from-accent-500 to-primary-500 rounded-full flex items-center justify-center text-white font-semibold">
+                                <UserCircle className="w-6 h-6" />
+                            </div>
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-semibold text-white truncate">{user?.username || 'User'}</p>
+                                <p className="text-xs text-gray-400 truncate">{user?.email || 'View Profile'}</p>
+                            </div>
+                        </Link>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-2 py-2 text-red-400 hover:bg-white/5 rounded-lg transition-colors"
+                        >
+                            <LogOut className="w-5 h-5" />
+                            <span className="font-medium">Logout</span>
+                        </button>
                     </div>
                 </div>
             </aside>

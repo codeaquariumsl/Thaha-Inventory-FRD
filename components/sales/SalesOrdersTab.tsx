@@ -1,14 +1,19 @@
 'use client';
 
+import React, { useState, useMemo, useEffect } from 'react';
+
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
 import { Plus, Search, Eye, Edit, Trash2, CheckCircle } from 'lucide-react';
-import { salesOrders as initialOrders, customers } from '@/data/salesData';
-import { products } from '@/data/mockData';
-import { SalesOrder, EnhancedSaleItem } from '@/types';
+import { SalesOrder, Customer, Product, EnhancedSaleItem } from '@/types';
+import * as api from '@/lib/api';
+// import { products as initialProducts } from '@/data/mockData'; // We will fetch products too
 
 export default function SalesOrdersTab() {
-    const [orders, setOrders] = useState(initialOrders);
+    const [orders, setOrders] = useState<SalesOrder[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -16,29 +21,103 @@ export default function SalesOrdersTab() {
     const [viewingOrder, setViewingOrder] = useState<SalesOrder | null>(null);
     const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
 
+    const [user, setUser] = useState<any>(null);
+
     const [formData, setFormData] = useState({
         customerId: '',
         deliveryDate: '',
         notes: '',
+        orderType: 'General' as 'General' | 'Tax',
     });
+
+    const canAccessTax = user?.role === 'admin' || user?.role === 'tax_user';
 
     const [orderItems, setOrderItems] = useState<EnhancedSaleItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [discount, setDiscount] = useState('0');
 
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) setUser(JSON.parse(storedUser));
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            setIsLoading(true);
+            const [ordersData, customersData, productsData] = await Promise.all([
+                api.getSalesOrders(),
+                api.getCustomers(),
+                api.getProducts()
+            ]);
+
+            const mappedOrders = ordersData.map((order: any) => ({
+                ...order,
+                id: order.id.toString(),
+                customerName: order.Customer ? order.Customer.name : 'Unknown',
+                subtotal: parseFloat(order.subtotal) || 0,
+                tax: parseFloat(order.tax) || 0,
+                discount: parseFloat(order.discount) || 0,
+                total: parseFloat(order.total) || 0,
+                items: order.items ? order.items.map((item: any) => {
+                    const price = parseFloat(item.price) || 0;
+                    const quantity = parseInt(item.quantity) || 0;
+                    const discount = parseFloat(item.discount) || 0;
+                    const total = parseFloat(item.total) || 0;
+                    // Recalculate tax for frontend display consistency (10%)
+                    const itemSub = quantity * price;
+                    const itemTax = (itemSub - discount) * 0.1;
+
+                    return {
+                        ...item,
+                        id: item.id.toString(),
+                        productId: item.productId.toString(),
+                        productName: item.Product ? item.Product.name : 'Unknown',
+                        uom: item.Product ? item.Product.uom : 'pcs',
+                        price,
+                        quantity,
+                        discount,
+                        tax: itemTax,
+                        total: total || (itemSub - discount + itemTax)
+                    };
+                }) : [],
+                deliveryDate: order.deliveryDate ? new Date(order.deliveryDate) : undefined,
+                createdAt: new Date(order.createdAt),
+                updatedAt: new Date(order.updatedAt)
+            }));
+
+            setOrders(mappedOrders);
+            setCustomers(customersData);
+            setProducts(productsData.map((p: any) => ({
+                ...p,
+                id: p.id.toString(),
+                price: parseFloat(p.price) || 0,
+                cost: parseFloat(p.cost) || 0,
+                stock: parseInt(p.stockQuantity) || 0,
+                reorderLevel: parseInt(p.reorderLevel) || 0,
+                category: p.Category ? p.Category.name : 'Uncategorized'
+            })));
+        } catch (error) {
+            console.error("Failed to load data", error);
+            alert("Failed to load data from backend. Ensure backend is running.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const filteredOrders = useMemo(() => {
-        return orders.filter(order => {
-            const matchesSearch = order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+        return orders.filter((order: SalesOrder) => {
+            const matchesSearch = (order.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === 'all' || order.status.toLowerCase() === statusFilter.toLowerCase();
             return matchesSearch && matchesStatus;
         });
     }, [orders, searchTerm, statusFilter]);
 
     const calculateTotals = () => {
-        const subtotal = orderItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-        const totalDiscount = orderItems.reduce((sum, item) => sum + item.discount, 0);
+        const subtotal = orderItems.reduce((sum: number, item: EnhancedSaleItem) => sum + (item.quantity * item.price), 0);
+        const totalDiscount = orderItems.reduce((sum: number, item: EnhancedSaleItem) => sum + item.discount, 0);
         const tax = (subtotal - totalDiscount) * 0.1;
         const total = subtotal - totalDiscount + tax;
         return { subtotal, tax, totalDiscount, total };
@@ -49,13 +128,14 @@ export default function SalesOrdersTab() {
             setEditingOrder(order);
             setFormData({
                 customerId: order.customerId,
-                deliveryDate: order.deliveryDate ? order.deliveryDate.toISOString().split('T')[0] : '',
+                deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '',
                 notes: order.notes || '',
+                orderType: order.orderType || 'General',
             });
             setOrderItems(order.items);
         } else {
             setEditingOrder(null);
-            setFormData({ customerId: '', deliveryDate: '', notes: '' });
+            setFormData({ customerId: '', deliveryDate: '', notes: '', orderType: 'General' });
             setOrderItems([]);
         }
         setIsModalOpen(true);
@@ -64,15 +144,17 @@ export default function SalesOrdersTab() {
     const handleAddItem = () => {
         if (!selectedProduct || !quantity) return;
 
-        const product = products.find(p => p.id === selectedProduct);
+        const product = products.find((p: any) => p.id.toString() === selectedProduct); // Loose equality for ID if string/number mismatch
         if (!product) return;
 
-        // Determine effective price (Customer Price or Standard Price)
-        const customer = customers.find(c => c.id === formData.customerId);
-        let price = product.price;
-        if (customer && customer.customerPrices && customer.customerPrices[selectedProduct]) {
-            price = customer.customerPrices[selectedProduct];
-        }
+        // Determine effective price
+        // Mock data logic for customer prices removed for simplicity or need to fetch customer specific price?
+        // Basic implementation: use product price.
+        // If we want customer price, we need to check if customer object has pricing. Backend Customer model doesn't have 'customerPrices' JSON field yet (FRD mentioned it, I ddn't implement JSON field fully or it's just 'customerPrices' field?).
+        // Model Customer has: name, email, etc. NO customerPrices JSON.
+        // So I'll stick to product.price.
+
+        let price = typeof product.price === 'string' ? parseFloat(product.price) : product.price;
 
         const qty = parseInt(quantity);
         const disc = parseFloat(discount) || 0;
@@ -80,23 +162,23 @@ export default function SalesOrdersTab() {
         const itemTax = (itemSubtotal - disc) * 0.1;
         const itemTotal = itemSubtotal - disc + itemTax;
 
-        const existingItem = orderItems.find(item => item.productId === selectedProduct);
+        const existingItem = orderItems.find(item => item.productId === product.id.toString());
 
         if (existingItem) {
             setOrderItems(orderItems.map(item =>
-                item.productId === selectedProduct
+                item.productId === product.id.toString()
                     ? {
                         ...item,
                         quantity: item.quantity + qty,
                         discount: item.discount + disc,
-                        tax: (item.quantity + qty) * item.price * 0.1,
-                        total: ((item.quantity + qty) * item.price) - (item.discount + disc) + ((item.quantity + qty) * item.price * 0.1),
+                        tax: ((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1,
+                        total: ((item.quantity + qty) * item.price) - (item.discount + disc) + (((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1),
                     }
                     : item
             ));
         } else {
             setOrderItems([...orderItems, {
-                productId: product.id,
+                productId: product.id.toString(),
                 productName: product.name,
                 uom: product.uom,
                 quantity: qty,
@@ -116,7 +198,7 @@ export default function SalesOrdersTab() {
         setOrderItems(orderItems.filter(item => item.productId !== productId));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (orderItems.length === 0) {
@@ -124,46 +206,77 @@ export default function SalesOrdersTab() {
             return;
         }
 
-        const customer = customers.find(c => c.id === formData.customerId);
+        const customer = customers.find(c => c.id.toString() === formData.customerId.toString());
         if (!customer) return;
 
         const { subtotal, tax, totalDiscount, total } = calculateTotals();
 
-        const orderData: SalesOrder = {
-            id: editingOrder?.id || Date.now().toString(),
-            orderNumber: editingOrder?.orderNumber || `SO-2024-${String(orders.length + 1).padStart(3, '0')}`,
+        const orderDataPayload = {
+            orderNumber: editingOrder?.orderNumber || `SO-${Date.now()}`, // Backend should handle or we generate unique. Backend model has unique constraint.
             customerId: formData.customerId,
-            customerName: customer.name,
-            items: orderItems,
+            items: orderItems.map(item => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                price: item.price,
+                discount: item.discount,
+                total: item.total
+            })),
             subtotal,
             tax,
             discount: totalDiscount,
             total,
-            status: editingOrder?.status || 'draft',
-            deliveryDate: formData.deliveryDate ? new Date(formData.deliveryDate) : undefined,
+            status: editingOrder?.status || 'Draft',
+            deliveryDate: formData.deliveryDate ? formData.deliveryDate : null,
             notes: formData.notes,
-            createdAt: editingOrder?.createdAt || new Date(),
-            updatedAt: new Date(),
+            orderType: formData.orderType,
         };
 
-        if (editingOrder) {
-            setOrders(orders.map(o => o.id === editingOrder.id ? orderData : o));
-        } else {
-            setOrders([orderData, ...orders]);
+        try {
+            if (editingOrder) {
+                await api.updateSalesOrder(editingOrder.id, orderDataPayload);
+            } else {
+                await api.createSalesOrder(orderDataPayload);
+            }
+            await loadData(); // Reload to get freshness
+            setIsModalOpen(false);
+        } catch (error: any) {
+            alert('Failed to save order: ' + error.message);
         }
-
-        setIsModalOpen(false);
     };
 
-    const handleConfirmOrder = (id: string) => {
-        setOrders(orders.map(o =>
-            o.id === id ? { ...o, status: 'confirmed' as const, updatedAt: new Date() } : o
-        ));
+    const handleConfirmOrder = async (id: string) => {
+        try {
+            // We need to send full update or partial? Controller uses update() with body.
+            // I can just update status?
+            // Controller: updateSalesOrder takes body and updates fields.
+            await api.updateSalesOrder(id, { status: 'Confirmed' }); // 'Confirmed' matches Enum in backend? 'Confirmed' (capitalized in model?)
+            // Model: 'confirmed' (lowercase) or 'Confirmed'? 
+            // SalesOrder.js: DataTypes.ENUM('Draft', 'Confirmed', 'Processing', 'Completed', 'Cancelled') -> Capitalized!
+
+            await loadData();
+        } catch (error: any) {
+            alert('Failed to confirm order: ' + error.message);
+        }
     };
 
-    const handleDeleteOrder = (id: string) => {
+    const handleApproveOrder = async (id: string) => {
+        try {
+            await api.approveSalesOrder(id);
+            setIsViewModalOpen(false);
+            loadData();
+        } catch (error: any) {
+            alert('Failed to approve order: ' + error.message);
+        }
+    };
+
+    const handleDeleteOrder = async (id: string) => {
         if (confirm('Are you sure you want to delete this order?')) {
-            setOrders(orders.filter(o => o.id !== id));
+            try {
+                await api.deleteSalesOrder(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete order: ' + error.message);
+            }
         }
     };
 
@@ -192,15 +305,15 @@ export default function SalesOrdersTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Order Value</p>
-                    <p className="text-2xl font-bold text-theme-primary">${orders.reduce((sum, o) => sum + o.subtotal, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-theme-primary">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.subtotal, 0).toFixed(2)}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Discount</p>
-                    <p className="text-2xl font-bold text-yellow-400">${orders.reduce((sum, o) => sum + o.discount, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-yellow-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.discount, 0).toFixed(2)}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Net Amount</p>
-                    <p className="text-2xl font-bold text-green-400">${orders.reduce((sum, o) => sum + o.total, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-green-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.total, 0).toFixed(2)}</p>
                 </div>
             </div>
 
@@ -237,6 +350,7 @@ export default function SalesOrdersTab() {
                             <th>Customer</th>
                             <th>Items</th>
                             <th>Total</th>
+                            <th>Type</th>
                             <th>Delivery Date</th>
                             <th>Status</th>
                             <th>Created</th>
@@ -249,12 +363,17 @@ export default function SalesOrdersTab() {
                                 <td className="font-semibold">{order.orderNumber}</td>
                                 <td>{order.customerName}</td>
                                 <td>{order.items.length} items</td>
-                                <td className="font-bold">${order.total.toFixed(2)}</td>
+                                <td className="font-bold">LKR {order.total.toFixed(2)}</td>
+                                <td>
+                                    <span className={`badge ${order.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
+                                        {order.orderType}
+                                    </span>
+                                </td>
                                 <td>{order.deliveryDate ? order.deliveryDate.toLocaleDateString() : '-'}</td>
                                 <td>
-                                    <span className={`badge ${order.status === 'completed' ? 'badge-success' :
-                                        order.status === 'confirmed' || order.status === 'processing' ? 'badge-info' :
-                                            order.status === 'draft' ? 'badge-warning' : 'badge-danger'
+                                    <span className={`badge ${order.status === 'Completed' ? 'badge-success' :
+                                        order.status === 'Confirmed' || order.status === 'Processing' ? 'badge-info' :
+                                            order.status === 'Draft' ? 'badge-warning' : 'badge-danger'
                                         }`}>
                                         {order.status}
                                     </span>
@@ -268,11 +387,11 @@ export default function SalesOrdersTab() {
                                         <button onClick={() => handleOpenModal(order)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Edit">
                                             <Edit className="w-4 h-4 text-blue-400" />
                                         </button>
-                                        {order.status === 'draft' && (
+                                        {/* {order.status === 'Draft' && (
                                             <button onClick={() => handleConfirmOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Confirm">
                                                 <CheckCircle className="w-4 h-4 text-green-400" />
                                             </button>
-                                        )}
+                                        )} */}
                                         <button onClick={() => handleDeleteOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
                                             <Trash2 className="w-4 h-4 text-red-400" />
                                         </button>
@@ -301,6 +420,19 @@ export default function SalesOrdersTab() {
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Delivery Date</label>
                             <input type="date" value={formData.deliveryDate} onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })} className="input-field" />
                         </div>
+                        {canAccessTax && (
+                            <div>
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">Order Type</label>
+                                <select
+                                    value={formData.orderType}
+                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
+                                    className="input-field"
+                                >
+                                    <option value="General">General</option>
+                                    <option value="Tax">Tax</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t border-white/10 pt-6">
@@ -322,8 +454,8 @@ export default function SalesOrdersTab() {
                                     className="input-field bg-white/5"
                                     placeholder="Price"
                                     value={selectedProduct ? (
-                                        customers.find(c => c.id === formData.customerId)?.customerPrices?.[selectedProduct] ||
-                                        products.find(p => p.id === selectedProduct)?.price || 0
+                                        customers.find(c => c.id.toString() === formData.customerId)?.customerPrices?.[selectedProduct] ||
+                                        products.find(p => p.id.toString() === selectedProduct)?.price || 0
                                     ).toFixed(2) : ''}
                                     readOnly
                                 />
@@ -363,11 +495,11 @@ export default function SalesOrdersTab() {
                                                 <tr key={item.productId} className="border-b border-white/10 hover:bg-white/5 transition-colors">
                                                     <td className="py-3 pr-4 text-theme-primary font-medium">{item.productName}</td>
                                                     <td className="py-3 px-2 text-center text-theme-secondary text-sm">{item.uom || 'pcs'}</td>
-                                                    <td className="py-3 px-2 text-right text-theme-secondary">${item.price.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-right text-theme-secondary">LKR {item.price.toFixed(2)}</td>
                                                     <td className="py-3 px-2 text-right text-theme-primary font-semibold">{item.quantity}</td>
-                                                    <td className="py-3 px-2 text-right text-yellow-400">${item.discount.toFixed(2)}</td>
-                                                    <td className="py-3 px-2 text-right text-green-400 font-semibold">${discountedPrice.toFixed(2)}</td>
-                                                    <td className="py-3 px-2 text-right text-theme-primary font-bold">${lineValue.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-right text-yellow-400">LKR {item.discount.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-right text-green-400 font-semibold">LKR {discountedPrice.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-right text-theme-primary font-bold">LKR {lineValue.toFixed(2)}</td>
                                                     <td className="py-3 pl-2 text-center">
                                                         <button
                                                             type="button"
@@ -396,19 +528,19 @@ export default function SalesOrdersTab() {
                         <div className="bg-white/5 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>${totals.subtotal.toFixed(2)}</span>
+                                <span>LKR {totals.subtotal.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-${totals.totalDiscount.toFixed(2)}</span>
+                                <span>-LKR {totals.totalDiscount.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Tax (10%):</span>
-                                <span>${totals.tax.toFixed(2)}</span>
+                                <span>LKR {totals.tax.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
                                 <span>Total:</span>
-                                <span>${totals.total.toFixed(2)}</span>
+                                <span>LKR {totals.total.toFixed(2)}</span>
                             </div>
                         </div>
                     )}
@@ -435,9 +567,9 @@ export default function SalesOrdersTab() {
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Status</p>
-                                <span className={`badge ${viewingOrder.status === 'completed' ? 'badge-success' :
-                                    viewingOrder.status === 'confirmed' || viewingOrder.status === 'processing' ? 'badge-info' :
-                                        viewingOrder.status === 'draft' ? 'badge-warning' : 'badge-danger'
+                                <span className={`badge ${viewingOrder.status === 'Completed' ? 'badge-success' :
+                                    viewingOrder.status === 'Confirmed' || viewingOrder.status === 'Processing' ? 'badge-info' :
+                                        viewingOrder.status === 'Draft' ? 'badge-warning' : 'badge-danger'
                                     }`}>
                                     {viewingOrder.status}
                                 </span>
@@ -455,9 +587,9 @@ export default function SalesOrdersTab() {
                                     <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × ${item.price.toFixed(2)}</p>
+                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
                                         </div>
-                                        <p className="font-bold text-theme-primary">${item.total.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -473,20 +605,38 @@ export default function SalesOrdersTab() {
                         <div className="bg-white/5 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>${viewingOrder.subtotal.toFixed(2)}</span>
+                                <span>LKR {viewingOrder.subtotal.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-${viewingOrder.discount.toFixed(2)}</span>
+                                <span>-LKR {viewingOrder.discount.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Tax:</span>
-                                <span>${viewingOrder.tax.toFixed(2)}</span>
+                                <span>LKR {viewingOrder.tax.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
                                 <span>Total:</span>
-                                <span>${viewingOrder.total.toFixed(2)}</span>
+                                <span>LKR {viewingOrder.total.toFixed(2)}</span>
                             </div>
+                        </div>
+
+                        <div className="flex gap-4 pt-4 border-t border-white/10">
+                            {viewingOrder.status === 'Draft' && (
+                                <button
+                                    onClick={() => handleApproveOrder(viewingOrder.id)}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                >
+                                    <CheckCircle className="w-5 h-5" />
+                                    Approve Order
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setIsViewModalOpen(false)}
+                                className="btn-outline flex-1"
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 )}

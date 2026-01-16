@@ -2,36 +2,77 @@
 
 import Sidebar from '@/components/Sidebar';
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Package, Plus, Search, Edit, Trash2, AlertCircle, Layers, Box, Tags, LayoutGrid, List } from 'lucide-react';
-import { products as initialProducts, categories as initialCategories } from '@/data/mockData';
-import { Product, Category } from '@/types';
+import { Product, Category, Supplier } from '@/types';
+import * as api from '@/lib/api';
 
 export default function ProductsPage() {
-    const [products, setProducts] = useState(initialProducts);
-    const [categoriesList, setCategoriesList] = useState(initialCategories);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+    // Category Management State
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [activeTab, setActiveTab] = useState<'finished_good' | 'raw_material'>('finished_good');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [isLoading, setIsLoading] = useState(false);
 
     // Form state
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
-        category: '',
+        categoryId: '',
         type: 'finished_good' as 'finished_good' | 'raw_material',
         description: '',
         price: '',
         cost: '',
         stock: '',
         reorderLevel: '',
-        supplier: 'TechSupply Co.',
+        supplier: '',
     });
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            setIsLoading(true);
+            const [productsData, categoriesData, suppliersData] = await Promise.all([
+                api.getProducts(),
+                api.getCategories(),
+                api.getSuppliers()
+            ]);
+
+            setProducts(productsData.map((p: any) => ({
+                ...p,
+                categoryId: p.categoryId ? p.categoryId.toString() : '',
+                category: p.Category ? p.Category.name : 'Uncategorized',
+                supplier: p.Supplier ? p.Supplier.name : 'No Supplier',
+                type: p.type || 'finished_good',
+                price: parseFloat(p.price) || 0,
+                cost: parseFloat(p.cost) || 0,
+                stock: parseInt(p.stockQuantity) || 0,
+                reorderLevel: parseInt(p.reorderLevel) || 0,
+                createdAt: new Date(p.createdAt),
+                updatedAt: new Date(p.updatedAt)
+            })));
+            setCategoriesList(categoriesData);
+            setSuppliers(suppliersData);
+        } catch (error) {
+            console.error("Failed to load data", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Filter products
     const filteredProducts = useMemo(() => {
@@ -44,7 +85,7 @@ export default function ProductsPage() {
         });
     }, [products, searchTerm, selectedCategory, activeTab]);
 
-    // Use categoriesList for filters instead of deriving from products
+    // Use categoriesList for filters
     const filterCategories = useMemo(() => {
         return ['all', ...categoriesList.map(c => c.name)];
     }, [categoriesList]);
@@ -55,9 +96,9 @@ export default function ProductsPage() {
             setFormData({
                 name: product.name,
                 sku: product.sku,
-                category: product.category,
+                categoryId: product.categoryId || '',
                 type: product.type,
-                description: product.description,
+                description: product.description || '',
                 price: product.price.toString(),
                 cost: product.cost.toString(),
                 stock: product.stock.toString(),
@@ -69,14 +110,14 @@ export default function ProductsPage() {
             setFormData({
                 name: '',
                 sku: '',
-                category: categoriesList[0]?.name || '',
+                categoryId: categoriesList[0]?.id || '',
                 type: activeTab, // Default to current tab
                 description: '',
                 price: '',
                 cost: '',
                 stock: '',
                 reorderLevel: '',
-                supplier: 'TechSupply Co.',
+                supplier: '',
             });
         }
         setIsModalOpen(true);
@@ -87,34 +128,59 @@ export default function ProductsPage() {
         setEditingProduct(null);
     };
 
-    const handleAddCategory = (e: React.FormEvent) => {
+    // Category Management
+    const handleSaveCategory = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newCategoryName.trim()) return;
 
-        const newCategory: Category = {
-            id: Date.now().toString(),
-            name: newCategoryName,
-            description: 'Custom category',
-        };
-
-        setCategoriesList([...categoriesList, newCategory]);
-        setNewCategoryName('');
-    };
-
-    const handleDeleteCategory = (id: string) => {
-        if (confirm('Are you sure you want to delete this category?')) {
-            setCategoriesList(categoriesList.filter(c => c.id !== id));
+        try {
+            if (editingCategory) {
+                await api.updateCategory(editingCategory.id, {
+                    name: newCategoryName,
+                    description: editingCategory.description || 'Custom category'
+                });
+            } else {
+                await api.createCategory({
+                    name: newCategoryName,
+                    description: 'Custom category'
+                });
+            }
+            loadData();
+            setNewCategoryName('');
+            setEditingCategory(null);
+        } catch (error: any) {
+            alert('Failed to save category: ' + error.message);
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleDeleteCategory = async (id: string, name: string) => {
+        if (confirm(`Are you sure you want to delete category "${name}"?`)) {
+            try {
+                await api.deleteCategory(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete category: ' + error.message);
+            }
+        }
+    };
+
+    const handleEditCategory = (category: Category) => {
+        setEditingCategory(category);
+        setNewCategoryName(category.name);
+    };
+
+    const handleCancelCategoryEdit = () => {
+        setEditingCategory(null);
+        setNewCategoryName('');
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const productData: Product = {
-            id: editingProduct?.id || Date.now().toString(),
+        const payload = {
             name: formData.name,
             sku: formData.sku,
-            category: formData.category,
+            categoryId: formData.categoryId,
             type: formData.type,
             description: formData.description,
             price: parseFloat(formData.price),
@@ -124,22 +190,29 @@ export default function ProductsPage() {
             supplier: formData.supplier,
             imageUrl: editingProduct?.imageUrl || '',
             uom: 'pcs', // Default UOM
-            createdAt: editingProduct?.createdAt || new Date(),
-            updatedAt: new Date(),
         };
 
-        if (editingProduct) {
-            setProducts(products.map(p => p.id === editingProduct.id ? productData : p));
-        } else {
-            setProducts([...products, productData]);
+        try {
+            if (editingProduct) {
+                await api.updateProduct(editingProduct.id, payload);
+            } else {
+                await api.createProduct(payload);
+            }
+            loadData();
+            handleCloseModal();
+        } catch (error: any) {
+            alert('Failed to save product: ' + error.message);
         }
-
-        handleCloseModal();
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this product?')) {
-            setProducts(products.filter(p => p.id !== id));
+            try {
+                await api.deleteProduct(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete product: ' + error.message);
+            }
         }
     };
 
@@ -229,7 +302,7 @@ export default function ProductsPage() {
                     <div className="glass-card p-6 mb-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
                                 <input
                                     type="text"
                                     placeholder="Search..."
@@ -254,7 +327,11 @@ export default function ProductsPage() {
                     </div>
 
                     {/* Products View */}
-                    {viewMode === 'grid' ? (
+                    {isLoading ? (
+                        <div className="flex justify-center p-12">
+                            <div className="text-theme-secondary">Loading products...</div>
+                        </div>
+                    ) : viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredProducts.map((product) => (
                                 <div key={product.id} className="glass-card p-6 animate-slide-up hover:border-primary-500/30 transition-colors">
@@ -300,7 +377,7 @@ export default function ProductsPage() {
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-theme-secondary">Price:</span>
-                                            <span className="text-theme-primary font-bold">${product.price.toFixed(2)}</span>
+                                            <span className="text-theme-primary font-bold">LKR {product.price.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-theme-secondary">Stock:</span>
@@ -356,7 +433,7 @@ export default function ProductsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-theme-primary">
-                                                    ${product.price.toFixed(2)}
+                                                    LKR {product.price.toFixed(2)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                                     <span className={`text-sm font-bold ${product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'}`}>
@@ -392,7 +469,7 @@ export default function ProductsPage() {
                         </div>
                     )}
 
-                    {filteredProducts.length === 0 && (
+                    {!isLoading && filteredProducts.length === 0 && (
                         <div className="glass-card p-12 text-center mt-6">
                             <Box className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-theme-secondary mb-2">No items found</h3>
@@ -446,6 +523,7 @@ export default function ProductsPage() {
                                     value={formData.type}
                                     onChange={(e) => setFormData({ ...formData, type: e.target.value as 'finished_good' | 'raw_material' })}
                                     className="input-field"
+                                    disabled={!!editingProduct} // Disable changing type for existing products
                                 >
                                     <option value="finished_good">Finished Good</option>
                                     <option value="raw_material">Raw Material</option>
@@ -456,17 +534,19 @@ export default function ProductsPage() {
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
                                     Category *
                                 </label>
-                                <select
-                                    required
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="input-field"
-                                >
-                                    <option value="">Select Category</option>
-                                    {categoriesList.map(cat => (
-                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
-                                    ))}
-                                </select>
+                                <div className="flex gap-2">
+                                    <select
+                                        required
+                                        value={formData.categoryId}
+                                        onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                                        className="input-field flex-1"
+                                    >
+                                        <option value="">Select Category</option>
+                                        {categoriesList.map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -479,15 +559,16 @@ export default function ProductsPage() {
                                     onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
                                     className="input-field"
                                 >
-                                    <option value="TechSupply Co.">TechSupply Co.</option>
-                                    <option value="Fashion Wholesale Inc.">Fashion Wholesale Inc.</option>
-                                    <option value="Global Foods Ltd.">Global Foods Ltd.</option>
+                                    <option value="">Select Supplier</option>
+                                    {suppliers.map(supplier => (
+                                        <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
+                                    ))}
                                 </select>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                    Price ($) *
+                                    Price (LKR) *
                                 </label>
                                 <input
                                     type="number"
@@ -502,7 +583,7 @@ export default function ProductsPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                    Cost ($) *
+                                    Cost (LKR) *
                                 </label>
                                 <input
                                     type="number"
@@ -579,31 +660,51 @@ export default function ProductsPage() {
                     title="Manage Categories"
                 >
                     <div className="space-y-6">
-                        <form onSubmit={handleAddCategory} className="flex gap-2">
+                        <form onSubmit={handleSaveCategory} className="flex gap-2">
                             <input
                                 type="text"
                                 value={newCategoryName}
                                 onChange={(e) => setNewCategoryName(e.target.value)}
-                                placeholder="New category name"
+                                placeholder={editingCategory ? "Update category name" : "New category name"}
                                 className="input-field flex-1"
                                 required
                             />
-                            <button type="submit" className="btn-primary whitespace-nowrap">
-                                Add Category
-                            </button>
+                            {editingCategory ? (
+                                <>
+                                    <button type="submit" className="btn-primary whitespace-nowrap">
+                                        Update
+                                    </button>
+                                    <button type="button" onClick={handleCancelCategoryEdit} className="btn-outline whitespace-nowrap">
+                                        Cancel
+                                    </button>
+                                </>
+                            ) : (
+                                <button type="submit" className="btn-primary whitespace-nowrap">
+                                    Add Category
+                                </button>
+                            )}
                         </form>
 
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
                             {categoriesList.map(category => (
                                 <div key={category.id} className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-border">
                                     <span className="text-theme-primary font-medium">{category.name}</span>
-                                    <button
-                                        onClick={() => handleDeleteCategory(category.id)}
-                                        className="p-2 hover:bg-theme-surface rounded-lg transition-colors text-red-400"
-                                        title="Delete Category"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleEditCategory(category)}
+                                            className="p-2 hover:bg-theme-surface rounded-lg transition-colors text-blue-400"
+                                            title="Edit Category"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteCategory(category.id, category.name)}
+                                            className="p-2 hover:bg-theme-surface rounded-lg transition-colors text-red-400"
+                                            title="Delete Category"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             {categoriesList.length === 0 && (

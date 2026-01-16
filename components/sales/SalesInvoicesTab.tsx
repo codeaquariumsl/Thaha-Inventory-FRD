@@ -1,19 +1,74 @@
 'use client';
 
+import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
-import { useState, useMemo } from 'react';
-import { Plus, Search, Eye, Send, DollarSign } from 'lucide-react';
-import { salesInvoices as initialInvoices, customers, deliveryOrders } from '@/data/salesData';
-import { products } from '@/data/mockData';
-import { SalesInvoice, EnhancedSaleItem } from '@/types';
+import { Plus, Search, Eye, Send, DollarSign, CheckSquare, Printer } from 'lucide-react';
+// import { salesInvoices as initialInvoices, customers, deliveryOrders } from '@/data/salesData';
+// import { products } from '@/data/mockData';
+import { SalesInvoice, EnhancedSaleItem, Customer, DeliveryOrder, Product } from '@/types';
+import * as api from '@/lib/api';
+import { generateInvoicePDF } from '@/lib/pdf-generator';
 
 export default function SalesInvoicesTab() {
-    const [invoices, setInvoices] = useState(initialInvoices);
+    const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [viewingInvoice, setViewingInvoice] = useState<SalesInvoice | null>(null);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+    // Data from API
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [user, setUser] = useState<any>(null);
+
+    const canAccessTax = user?.role === 'admin' || user?.role === 'tax_user';
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) setUser(JSON.parse(storedUser));
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            const [invData, custData, doData, prodData] = await Promise.all([
+                api.getInvoices(),
+                api.getCustomers(),
+                api.getDeliveryOrders(),
+                api.getProducts()
+            ]);
+
+            setInvoices(invData.map((inv: any) => ({
+                ...inv,
+                id: inv.id.toString(),
+                customerName: inv.Customer ? inv.Customer.name : (inv.customerName || 'Unknown'),
+                subtotal: parseFloat(inv.subtotal) || 0,
+                tax: parseFloat(inv.tax) || 0,
+                discount: parseFloat(inv.discount) || 0,
+                total: parseFloat(inv.total) || 0,
+                amountPaid: parseFloat(inv.amountPaid) || 0,
+                amountDue: parseFloat(inv.amountDue) || 0,
+                dueDate: new Date(inv.dueDate),
+                createdAt: new Date(inv.createdAt),
+                paidDate: inv.paidDate ? new Date(inv.paidDate) : undefined,
+                items: inv.items ? inv.items.map((item: any) => ({
+                    ...item,
+                    price: parseFloat(item.price) || 0,
+                    quantity: parseInt(item.quantity) || 0,
+                    discount: parseFloat(item.discount) || 0,
+                    tax: parseFloat(item.tax) || 0,
+                    total: parseFloat(item.total) || 0,
+                })) : []
+            })));
+            setCustomers(custData.map((c: any) => ({ ...c, id: c.id.toString() })));
+            setDeliveryOrders(doData.map((d: any) => ({ ...d, id: d.id.toString(), customerId: d.customerId.toString() })));
+            setProducts(prodData.map((p: any) => ({ ...p, id: p.id.toString() })));
+        } catch (error) {
+            console.error("Failed to load invoice data", error);
+        }
+    };
 
     const [formData, setFormData] = useState({
         customerId: '',
@@ -21,6 +76,7 @@ export default function SalesInvoicesTab() {
         dueDate: '',
         paymentTerms: 'Net 30',
         notes: '',
+        orderType: 'General' as 'General' | 'Tax',
     });
 
     const [invoiceItems, setInvoiceItems] = useState<EnhancedSaleItem[]>([]);
@@ -32,7 +88,7 @@ export default function SalesInvoicesTab() {
         return invoices.filter(invoice => {
             const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
+            const matchesStatus = statusFilter === 'all' || invoice.status.toLowerCase() === statusFilter.toLowerCase();
             return matchesSearch && matchesStatus;
         });
     }, [invoices, searchTerm, statusFilter]);
@@ -42,10 +98,10 @@ export default function SalesInvoicesTab() {
         return formData.customerId
             ? deliveryOrders.filter(d =>
                 d.customerId === formData.customerId &&
-                (d.status === 'approved' || d.status === 'delivered' || d.status === 'in_transit')
+                (d.status.toLowerCase() === 'approved' || d.status.toLowerCase() === 'delivered' || d.status.toLowerCase() === 'in transit' || d.status.toLowerCase() === 'in_transit')
             )
             : [];
-    }, [formData.customerId]);
+    }, [formData.customerId, deliveryOrders]);
 
     const handleDeliveryOrderChange = (deliveryOrderId: string) => {
         const delivery = deliveryOrders.find(d => d.id === deliveryOrderId);
@@ -53,14 +109,38 @@ export default function SalesInvoicesTab() {
             setFormData({
                 ...formData,
                 deliveryOrderId,
-                notes: `Generated from Delivery Order ${delivery.deliveryNumber}`
+                notes: `Generated from Delivery Order ${delivery.deliveryNumber}`,
+                orderType: delivery.orderType || 'General' // Inherit from delivery order
             });
-            setInvoiceItems(delivery.items);
+            // We need to map delivery items to invoice items (EnhancedSaleItem)
+            // Assuming delivery items have productId, quantity. Price might need to be fetched from products or sales order if available.
+            // Since delivery items structure might differ, let's map it safely.
+            const mappedItems = delivery.items.map(di => {
+                const product = products.find(p => p.id === di.productId);
+                return {
+                    productId: di.productId,
+                    productName: product?.name || 'Unknown Product',
+                    uom: product?.uom || 'pcs',
+                    quantity: di.quantity,
+                    price: product?.price || 0, // In a real app, this should come from the Sales Order
+                    discount: 0,
+                    tax: 0,
+                    total: (di.quantity * (product?.price || 0)) // Recalculate based on current price
+                };
+            });
+            // Re-calculate totals for these items:
+            const itemsWithTotals = mappedItems.map(item => {
+                const sub = item.quantity * item.price;
+                const ax = sub * 0.1;
+                return { ...item, tax: ax, total: sub + ax };
+            });
+            setInvoiceItems(itemsWithTotals);
         } else {
             setFormData({
                 ...formData,
                 deliveryOrderId: '',
-                notes: ''
+                notes: '',
+                orderType: 'General'
             });
             setInvoiceItems([]);
         }
@@ -89,6 +169,7 @@ export default function SalesInvoicesTab() {
         setInvoiceItems([...invoiceItems, {
             productId: product.id,
             productName: product.name,
+            uom: product.uom || 'pcs',
             quantity: qty,
             price: product.price,
             discount: disc,
@@ -101,7 +182,7 @@ export default function SalesInvoicesTab() {
         setDiscount('0');
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (invoiceItems.length === 0) {
@@ -113,15 +194,15 @@ export default function SalesInvoicesTab() {
         if (!customer) return;
 
         const deliveryOrder = deliveryOrders.find(d => d.id === formData.deliveryOrderId);
+        // Note: In a real app, we might want to link the invoice to a Sales Order ID if available
+        // salesOrderId is optional in the interface, check if delivery order has it.
+        const salesOrderId = deliveryOrder?.salesOrderId || undefined;
+
         const { subtotal, tax, totalDiscount, total } = calculateTotals();
 
-        const newInvoice: SalesInvoice = {
-            id: Date.now().toString(),
-            invoiceNumber: `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`,
+        const payload = {
             customerId: formData.customerId,
-            salesOrderId: deliveryOrder?.salesOrderId,
-            customerName: customer.name,
-            customerEmail: customer.email,
+            salesOrderId: salesOrderId,
             items: invoiceItems,
             subtotal,
             tax,
@@ -129,28 +210,75 @@ export default function SalesInvoicesTab() {
             total,
             amountPaid: 0,
             amountDue: total,
-            status: 'draft',
-            dueDate: new Date(formData.dueDate),
+            status: 'Draft',
+            dueDate: formData.dueDate,
             paymentTerms: formData.paymentTerms,
             notes: formData.notes,
-            createdAt: new Date(),
+            orderType: formData.orderType
         };
 
-        setInvoices([newInvoice, ...invoices]);
-        setIsCreateModalOpen(false);
-        setInvoiceItems([]);
+        try {
+            await api.createInvoice(payload);
+            loadData();
+            setIsCreateModalOpen(false);
+            setInvoiceItems([]);
+            setFormData({ ...formData, customerId: '', deliveryOrderId: '', notes: '', orderType: 'General' });
+        } catch (error: any) {
+            alert('Failed to create invoice: ' + error.message);
+        }
     };
 
-    const handleMarkPaid = (id: string) => {
-        setInvoices(invoices.map(inv =>
-            inv.id === id ? { ...inv, status: 'paid' as const, amountPaid: inv.total, amountDue: 0, paidDate: new Date() } : inv
-        ));
+    const handleMarkPaid = async (id: string) => {
+        const invoice = invoices.find(i => i.id === id);
+        if (!invoice) return;
+
+        try {
+            await api.updateInvoice(id, {
+                status: 'Paid',
+                amountPaid: invoice.total,
+                amountDue: 0,
+                paidDate: new Date()
+            });
+            loadData();
+        } catch (error: any) {
+            alert('Failed to mark as paid: ' + error.message);
+        }
     };
 
-    const handleSendInvoice = (id: string) => {
-        setInvoices(invoices.map(inv =>
-            inv.id === id ? { ...inv, status: 'sent' as const } : inv
-        ));
+    const handleSendInvoice = async (id: string) => {
+        try {
+            await api.updateInvoice(id, { status: 'Sent' });
+            loadData();
+        } catch (error: any) {
+            alert('Failed to send invoice: ' + error.message);
+        }
+    };
+
+    const handleApprove = async (id: string) => {
+        try {
+            await api.approveInvoice(id);
+            loadData();
+        } catch (error: any) {
+            alert('Failed to approve invoice: ' + error.message);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (confirm('Are you sure you want to delete this invoice?')) {
+            try {
+                await api.deleteInvoice(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete invoice: ' + error.message);
+            }
+        }
+    };
+
+    const handlePrintInvoice = async (id: string) => {
+        const invoice = invoices.find(i => i.id === id);
+        if (invoice) {
+            await generateInvoicePDF(invoice);
+        }
     };
 
     const totals = calculateTotals();
@@ -169,6 +297,7 @@ export default function SalesInvoicesTab() {
                         dueDate: '',
                         paymentTerms: 'Net 30',
                         notes: '',
+                        orderType: 'General'
                     });
                     setInvoiceItems([]);
                     setIsCreateModalOpen(true);
@@ -186,19 +315,19 @@ export default function SalesInvoicesTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Paid</p>
-                    <p className="text-2xl font-bold text-green-400">{invoices.filter(i => i.status === 'paid').length}</p>
+                    <p className="text-2xl font-bold text-green-400">{invoices.filter(i => i.status === 'Paid').length}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Pending</p>
-                    <p className="text-2xl font-bold text-yellow-400">{invoices.filter(i => i.status === 'sent' || i.status === 'partial').length}</p>
+                    <p className="text-2xl font-bold text-yellow-400">{invoices.filter(i => i.status === 'Sent' || i.status === 'Partial').length}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Overdue</p>
-                    <p className="text-2xl font-bold text-red-400">{invoices.filter(i => i.status === 'overdue').length}</p>
+                    <p className="text-2xl font-bold text-red-400">{invoices.filter(i => i.status === 'Overdue').length}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Due</p>
-                    <p className="text-2xl font-bold text-theme-primary">${invoices.reduce((sum, i) => sum + i.amountDue, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-theme-primary">LKR {invoices.reduce((sum, i) => sum + i.amountDue, 0).toFixed(2)}</p>
                 </div>
             </div>
 
@@ -211,11 +340,12 @@ export default function SalesInvoicesTab() {
                     </div>
                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
                         <option value="all">All Status</option>
-                        <option value="draft">Draft</option>
-                        <option value="sent">Sent</option>
-                        <option value="paid">Paid</option>
-                        <option value="partial">Partial</option>
-                        <option value="overdue">Overdue</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Partial">Partial</option>
+                        <option value="Overdue">Overdue</option>
                     </select>
                 </div>
             </div>
@@ -231,6 +361,7 @@ export default function SalesInvoicesTab() {
                             <th>Paid</th>
                             <th>Due</th>
                             <th>Due Date</th>
+                            <th>Type</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -240,15 +371,21 @@ export default function SalesInvoicesTab() {
                             <tr key={invoice.id}>
                                 <td className="font-semibold">{invoice.invoiceNumber}</td>
                                 <td>{invoice.customerName}</td>
-                                <td className="font-bold">${invoice.total.toFixed(2)}</td>
-                                <td className="text-green-400">${invoice.amountPaid.toFixed(2)}</td>
-                                <td className="text-red-400">${invoice.amountDue.toFixed(2)}</td>
+                                <td className="font-bold">LKR {invoice.total.toFixed(2)}</td>
+                                <td className="text-green-400">LKR {invoice.amountPaid.toFixed(2)}</td>
+                                <td className="text-red-400">LKR {invoice.amountDue.toFixed(2)}</td>
                                 <td>{invoice.dueDate.toLocaleDateString()}</td>
                                 <td>
-                                    <span className={`badge ${invoice.status === 'paid' ? 'badge-success' :
-                                        invoice.status === 'partial' ? 'badge-info' :
-                                            invoice.status === 'sent' ? 'badge-warning' :
-                                                invoice.status === 'overdue' ? 'badge-danger' : 'badge-warning'
+                                    <span className={`badge ${invoice.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
+                                        {invoice.orderType}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span className={`badge ${invoice.status === 'Paid' ? 'badge-success' :
+                                        invoice.status === 'Partial' ? 'badge-info' :
+                                            invoice.status === 'Sent' ? 'badge-warning' :
+                                                invoice.status === 'Approved' ? 'badge-success' :
+                                                    invoice.status === 'Overdue' ? 'badge-danger' : 'badge-warning'
                                         }`}>
                                         {invoice.status}
                                     </span>
@@ -258,16 +395,28 @@ export default function SalesInvoicesTab() {
                                         <button onClick={() => { setViewingInvoice(invoice); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
                                             <Eye className="w-4 h-4 text-primary-400" />
                                         </button>
-                                        {invoice.status === 'draft' && (
+                                        {invoice.status === 'Approved' && (
+                                            <button onClick={() => handlePrintInvoice(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Print Invoice">
+                                                <Printer className="w-4 h-4 text-blue-400" />
+                                            </button>
+                                        )}
+                                        {/* {invoice.status === 'Draft' && (
+                                            <>
+                                                <button onClick={() => handleApprove(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Approve">
+                                                    <CheckSquare className="w-4 h-4 text-green-400" />
+                                                </button>
+                                            </>
+                                        )}
+                                        {invoice.status === 'Approved' && (
                                             <button onClick={() => handleSendInvoice(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Send">
                                                 <Send className="w-4 h-4 text-blue-400" />
                                             </button>
                                         )}
-                                        {(invoice.status === 'sent' || invoice.status === 'partial') && (
+                                        {(invoice.status === 'Sent' || invoice.status === 'Partial') && (
                                             <button onClick={() => handleMarkPaid(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Mark Paid">
                                                 <DollarSign className="w-4 h-4 text-green-400" />
                                             </button>
-                                        )}
+                                        )} */}
                                     </div>
                                 </td>
                             </tr>
@@ -330,6 +479,20 @@ export default function SalesInvoicesTab() {
                                 <option value="Due on Receipt">Due on Receipt</option>
                             </select>
                         </div>
+                        {canAccessTax && (
+                            <div>
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">Invoice Type</label>
+                                <select
+                                    value={formData.orderType}
+                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
+                                    className="input-field"
+                                    disabled={!!formData.deliveryOrderId} // Disable if inherited from Delivery Order
+                                >
+                                    <option value="General">General</option>
+                                    <option value="Tax">Tax</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t border-white/10 pt-6">
@@ -340,7 +503,7 @@ export default function SalesInvoicesTab() {
                                     <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="input-field">
                                         <option value="">Select Product</option>
                                         {products.map(product => (
-                                            <option key={product.id} value={product.id}>{product.name} - ${product.price.toFixed(2)}</option>
+                                            <option key={product.id} value={product.id}>{product.name} - LKR {product.price}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -362,9 +525,9 @@ export default function SalesInvoicesTab() {
                                     <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                                         <div className="flex-1">
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × ${item.price.toFixed(2)}</p>
+                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
                                         </div>
-                                        <p className="font-bold text-theme-primary">${item.total.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -380,19 +543,19 @@ export default function SalesInvoicesTab() {
                         <div className="bg-white/5 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>${totals.subtotal.toFixed(2)}</span>
+                                <span>LKR {totals.subtotal.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-${totals.totalDiscount.toFixed(2)}</span>
+                                <span>-LKR {totals.totalDiscount.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Tax (10%):</span>
-                                <span>${totals.tax.toFixed(2)}</span>
+                                <span>LKR {totals.tax.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
                                 <span>Total:</span>
-                                <span>${totals.total.toFixed(2)}</span>
+                                <span>LKR {totals.total.toFixed(2)}</span>
                             </div>
                         </div>
                     )}
@@ -434,9 +597,9 @@ export default function SalesInvoicesTab() {
                                     <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × ${item.price.toFixed(2)}</p>
+                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
                                         </div>
-                                        <p className="font-bold text-theme-primary">${item.total.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -445,27 +608,86 @@ export default function SalesInvoicesTab() {
                         <div className="bg-white/5 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>${viewingInvoice.subtotal.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.subtotal.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-${viewingInvoice.discount.toFixed(2)}</span>
+                                <span>-LKR {viewingInvoice.discount.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Tax:</span>
-                                <span>${viewingInvoice.tax.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.tax.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
                                 <span>Total:</span>
-                                <span>${viewingInvoice.total.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.total.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-green-400 border-t border-white/10 pt-2">
                                 <span>Amount Paid:</span>
-                                <span>${viewingInvoice.amountPaid.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.amountPaid.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-red-400">
                                 <span>Amount Due:</span>
-                                <span>${viewingInvoice.amountDue.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.amountDue.toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                                <span className="text-sm text-theme-secondary">Status</span>
+                                <span className={`badge ${viewingInvoice.status === 'Paid' ? 'badge-success' :
+                                    viewingInvoice.status === 'Partial' ? 'badge-info' :
+                                        viewingInvoice.status === 'Sent' ? 'badge-warning' :
+                                            viewingInvoice.status === 'Approved' ? 'badge-success' :
+                                                viewingInvoice.status === 'Overdue' ? 'badge-danger' : 'badge-warning'
+                                    }`}>
+                                    {viewingInvoice.status}
+                                </span>
+                            </div>
+
+                            <div className="flex gap-4">
+                                {viewingInvoice.status === 'Draft' && (
+                                    <button
+                                        onClick={() => { handleApprove(viewingInvoice.id); setIsViewModalOpen(false); }}
+                                        className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                    >
+                                        <CheckSquare className="w-5 h-5" />
+                                        Approve Invoice
+                                    </button>
+                                )}
+                                {viewingInvoice.status === 'Approved' && (
+                                    <>
+                                        <button
+                                            onClick={() => { handleSendInvoice(viewingInvoice.id); setIsViewModalOpen(false); }}
+                                            className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                        >
+                                            <Send className="w-5 h-5" />
+                                            Send Invoice
+                                        </button>
+                                        <button
+                                            onClick={() => { handlePrintInvoice(viewingInvoice.id); }}
+                                            className="btn-secondary flex-1 flex items-center justify-center gap-2"
+                                        >
+                                            <Printer className="w-5 h-5" />
+                                            Print PDF
+                                        </button>
+                                    </>
+                                )}
+                                {(viewingInvoice.status === 'Sent' || viewingInvoice.status === 'Partial') && (
+                                    <button
+                                        onClick={() => { handleMarkPaid(viewingInvoice.id); setIsViewModalOpen(false); }}
+                                        className="btn-primary flex-1 flex items-center justify-center gap-2"
+                                    >
+                                        <DollarSign className="w-5 h-5" />
+                                        Mark Paid
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setIsViewModalOpen(false)}
+                                    className="btn-outline flex-1"
+                                >
+                                    Close
+                                </button>
                             </div>
                         </div>
                     </div>
