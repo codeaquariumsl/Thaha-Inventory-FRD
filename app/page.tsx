@@ -52,12 +52,23 @@ export default function Home() {
 
             setSales(salesData.map((s: any) => ({
                 ...s,
+                total: parseFloat(s.total) || 0,
+                subtotal: parseFloat(s.subtotal) || 0,
+                tax: parseFloat(s.tax) || 0,
+                discount: parseFloat(s.discount) || 0,
                 createdAt: new Date(s.createdAt),
-                items: s.items || []
+                items: (s.items || []).map((item: any) => ({
+                    ...item,
+                    total: parseFloat(item.total) || 0,
+                    price: parseFloat(item.price) || 0,
+                    discount: parseFloat(item.discount) || 0,
+                    tax: parseFloat(item.tax) || 0,
+                }))
             })));
 
             setPurchases(purchData.map((p: any) => ({
                 ...p,
+                total: parseFloat(p.total) || 0,
                 createdAt: new Date(p.createdAt),
             })));
 
@@ -70,7 +81,7 @@ export default function Home() {
     const stats = useMemo(() => {
         const totalRevenue = sales
             .filter(s => s.status === 'Completed' || s.status === 'Confirmed') // Adjusted logic
-            .reduce((sum, sale) => sum + (parseFloat(sale.total) || 0), 0);
+            .reduce((sum, sale) => sum + (sale.total || 0), 0);
 
         const totalSalesCount = sales.filter(s => s.status === 'Completed' || s.status === 'Confirmed').length;
 
@@ -118,7 +129,7 @@ export default function Home() {
                     productSales.set(item.productId, {
                         name: item.productName,
                         quantity: existing.quantity + item.quantity,
-                        revenue: existing.revenue + parseFloat(item.total || "0"),
+                        revenue: existing.revenue + (item.total || 0),
                     });
                 });
             }
