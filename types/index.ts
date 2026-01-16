@@ -147,6 +147,7 @@ export interface SalesOrder {
     orderNumber: string;
     customerId: string;
     customerName: string;
+    Customer?: Customer;
     items: EnhancedSaleItem[];
     subtotal: number;
     tax: number;
@@ -168,6 +169,7 @@ export interface DeliveryOrder {
     salesOrderNumber: string;
     customerId: string;
     customerName: string;
+    Customer?: Customer;
     deliveryAddress: string;
     items: EnhancedSaleItem[];
     status: 'Pending' | 'Approved' | 'In Transit' | 'Delivered' | 'Cancelled';
@@ -187,6 +189,7 @@ export interface SalesInvoice {
     customerId: string;
     customerName: string;
     customerEmail?: string;
+    Customer?: Customer;
     items: EnhancedSaleItem[];
     subtotal: number;
     tax: number;
@@ -211,6 +214,7 @@ export interface SalesReturn {
     invoiceNumber?: string;
     customerId: string;
     customerName: string;
+    Customer?: Customer;
     items: EnhancedSaleItem[];
     subtotal: number;
     tax: number;

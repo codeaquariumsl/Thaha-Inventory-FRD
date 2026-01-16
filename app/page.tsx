@@ -193,7 +193,7 @@ export default function Home() {
                             {recentSales.map((sale) => (
                                 <div key={sale.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
                                     <div className="flex-1">
-                                        <p className="font-semibold text-theme-primary">{sale.Customer.name || sale.id}</p>
+                                        <p className="font-semibold text-theme-primary">{sale.Customer?.name || sale.customerName || sale.id}</p>
                                         <p className="text-sm text-theme-secondary">{sale.orderNumber}</p>
                                     </div>
                                     <div className="text-right">
