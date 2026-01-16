@@ -50,11 +50,13 @@ export default function SalesInvoicesTab() {
                 total: parseFloat(inv.total) || 0,
                 amountPaid: parseFloat(inv.amountPaid) || 0,
                 amountDue: parseFloat(inv.amountDue) || 0,
+                invoiceDate: inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt),
                 dueDate: new Date(inv.dueDate),
                 createdAt: new Date(inv.createdAt),
                 paidDate: inv.paidDate ? new Date(inv.paidDate) : undefined,
                 items: inv.items ? inv.items.map((item: any) => ({
                     ...item,
+                    Product: item.Product || { name: item.productName || 'Unknown', uom: item.uom || 'pcs' },
                     price: parseFloat(item.price) || 0,
                     quantity: parseInt(item.quantity) || 0,
                     discount: parseFloat(item.discount) || 0,

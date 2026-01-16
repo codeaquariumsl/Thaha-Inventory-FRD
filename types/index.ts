@@ -139,6 +139,10 @@ export interface EnhancedSaleItem {
     discount: number;
     tax: number;
     total: number;
+    Product?: {
+        name: string;
+        uom: string;
+    };
 }
 
 // Sales Order Types
@@ -198,6 +202,7 @@ export interface SalesInvoice {
     amountPaid: number;
     amountDue: number;
     status: 'Draft' | 'Approved' | 'Sent' | 'Paid' | 'Partial' | 'Overdue' | 'Cancelled';
+    invoiceDate: Date;
     dueDate: Date;
     paidDate?: Date;
     paymentTerms: string;

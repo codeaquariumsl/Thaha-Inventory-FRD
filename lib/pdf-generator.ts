@@ -124,8 +124,8 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     // --- Table ---
     const tableData = invoice.items.map((item, index) => [
         index + 1,
-        item.Product.name,
-        item.Product.uom || 'pcs',
+        item.Product?.name || item.productName || 'Unknown',
+        item.Product?.uom || item.uom || 'pcs',
         item.quantity,
         `LKR ${item.price.toFixed(2)}`,
         item.discount > 0 ? `LKR ${item.discount.toFixed(2)}` : '0.00',
