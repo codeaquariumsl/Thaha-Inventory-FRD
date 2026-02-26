@@ -4,19 +4,26 @@ import Sidebar from '@/components/Sidebar';
 import Modal from '@/components/Modal';
 import { useState, useMemo, useEffect } from 'react';
 import { Package, Plus, Search, Edit, Trash2, AlertCircle, Layers, Box, Tags, LayoutGrid, List } from 'lucide-react';
-import { Product, Category, Supplier } from '@/types';
+import { Product, Category, Supplier, Color } from '@/types';
 import * as api from '@/lib/api';
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+    const [colorsList, setColorsList] = useState<Color[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [isColorModalOpen, setIsColorModalOpen] = useState(false);
 
     // Category Management State
     const [newCategoryName, setNewCategoryName] = useState('');
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+
+    // Color Management State
+    const [newColorName, setNewColorName] = useState('');
+    const [newColorHex, setNewColorHex] = useState('#000000');
+    const [editingColor, setEditingColor] = useState<Color | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
@@ -37,6 +44,8 @@ export default function ProductsPage() {
         stock: '',
         reorderLevel: '',
         supplier: '',
+        isHaveLid: false,
+        colorIds: [] as string[],
     });
 
     useEffect(() => {
@@ -46,10 +55,11 @@ export default function ProductsPage() {
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const [productsData, categoriesData, suppliersData] = await Promise.all([
+            const [productsData, categoriesData, suppliersData, colorsData] = await Promise.all([
                 api.getProducts(),
                 api.getCategories(),
-                api.getSuppliers()
+                api.getSuppliers(),
+                api.getColors()
             ]);
 
             setProducts(productsData.map((p: any) => ({
@@ -62,10 +72,13 @@ export default function ProductsPage() {
                 cost: parseFloat(p.cost) || 0,
                 stock: parseInt(p.stockQuantity) || 0,
                 reorderLevel: parseInt(p.reorderLevel) || 0,
+                isHaveLid: !!p.isHaveLid,
+                colors: p.Colors || p.colors || [],
                 createdAt: new Date(p.createdAt),
                 updatedAt: new Date(p.updatedAt)
             })));
             setCategoriesList(categoriesData);
+            setColorsList(colorsData);
             setSuppliers(suppliersData);
         } catch (error) {
             console.error("Failed to load data", error);
@@ -104,6 +117,8 @@ export default function ProductsPage() {
                 stock: product.stock.toString(),
                 reorderLevel: product.reorderLevel.toString(),
                 supplier: product.supplier,
+                isHaveLid: !!product.isHaveLid,
+                colorIds: product.colors?.map(c => c.id.toString()) || [],
             });
         } else {
             setEditingProduct(null);
@@ -118,6 +133,8 @@ export default function ProductsPage() {
                 stock: '',
                 reorderLevel: '',
                 supplier: '',
+                isHaveLid: false,
+                colorIds: [],
             });
         }
         setIsModalOpen(true);
@@ -174,6 +191,55 @@ export default function ProductsPage() {
         setNewCategoryName('');
     };
 
+    // Color Management
+    const handleSaveColor = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newColorName.trim()) return;
+
+        try {
+            if (editingColor) {
+                await api.updateColor(editingColor.id, {
+                    name: newColorName,
+                    hexCode: newColorHex
+                });
+            } else {
+                await api.createColor({
+                    name: newColorName,
+                    hexCode: newColorHex
+                });
+            }
+            loadData();
+            setNewColorName('');
+            setNewColorHex('#000000');
+            setEditingColor(null);
+        } catch (error: any) {
+            alert('Failed to save color: ' + error.message);
+        }
+    };
+
+    const handleDeleteColor = async (id: string, name: string) => {
+        if (confirm(`Are you sure you want to delete color "${name}"?`)) {
+            try {
+                await api.deleteColor(id);
+                loadData();
+            } catch (error: any) {
+                alert('Failed to delete color: ' + error.message);
+            }
+        }
+    };
+
+    const handleEditColor = (color: Color) => {
+        setEditingColor(color);
+        setNewColorName(color.name);
+        setNewColorHex(color.hexCode || '#000000');
+    };
+
+    const handleCancelColorEdit = () => {
+        setEditingColor(null);
+        setNewColorName('');
+        setNewColorHex('#000000');
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -189,6 +255,8 @@ export default function ProductsPage() {
             reorderLevel: parseInt(formData.reorderLevel),
             supplier: formData.supplier,
             imageUrl: editingProduct?.imageUrl || '',
+            isHaveLid: formData.isHaveLid,
+            colorIds: formData.colorIds.map(id => parseInt(id)),
             uom: 'pcs', // Default UOM
         };
 
@@ -282,6 +350,13 @@ export default function ProductsPage() {
 
                         <div className="flex gap-2">
                             <button
+                                onClick={() => setIsColorModalOpen(true)}
+                                className="btn-outline flex items-center gap-2"
+                            >
+                                <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-red-500 via-green-500 to-blue-500" />
+                                Manage Colors
+                            </button>
+                            <button
                                 onClick={() => setIsCategoryModalOpen(true)}
                                 className="btn-outline flex items-center gap-2"
                             >
@@ -301,14 +376,14 @@ export default function ProductsPage() {
                     {/* Filters */}
                     <div className="glass-card p-6 mb-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
+                            <div className="search-wrapper">
+                                <Search className="search-icon" />
                                 <input
                                     type="text"
                                     placeholder="Search..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="input-field pl-10"
+                                    className="input-field search-input"
                                     autoFocus
                                 />
                             </div>
@@ -380,6 +455,22 @@ export default function ProductsPage() {
                                             <span className="text-theme-primary font-bold">LKR {product.price.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
+                                            <span className="text-theme-secondary">Has Lid:</span>
+                                            <span className="text-theme-primary font-medium">{product.isHaveLid ? 'Yes' : 'No'}</span>
+                                        </div>
+                                        {product.colors && product.colors.length > 0 && (
+                                            <div className="flex flex-col gap-1 py-1">
+                                                <span className="text-theme-secondary text-sm">Colors:</span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {product.colors.map(color => (
+                                                        <span key={color.id} className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-theme-border" style={{ backgroundColor: color.hexCode + '20', color: color.hexCode, borderColor: color.hexCode + '40' }}>
+                                                            {color.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm">
                                             <span className="text-theme-secondary">Stock:</span>
                                             <span className={`font-bold ${product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'
                                                 }`}>
@@ -407,6 +498,7 @@ export default function ProductsPage() {
                                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Name / SKU</th>
                                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Category</th>
                                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Price</th>
+                                            <th className="px-6 py-4 text-center text-xs font-semibold text-theme-secondary uppercase tracking-wider">Has Lid</th>
                                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Stock</th>
                                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Actions</th>
                                         </tr>
@@ -426,6 +518,13 @@ export default function ProductsPage() {
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm font-medium text-theme-primary">{product.name}</div>
                                                     <div className="text-sm text-theme-secondary">{product.sku}</div>
+                                                    {product.colors && product.colors.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {product.colors.map(color => (
+                                                                <div key={color.id} className="w-3 h-3 rounded-full border border-theme-border" style={{ backgroundColor: color.hexCode }} title={color.name} />
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className="px-3 py-1 rounded-full text-xs font-medium bg-theme-surface text-theme-secondary">
@@ -434,6 +533,13 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-theme-primary">
                                                     LKR {product.price.toFixed(2)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-theme-primary">
+                                                    {product.isHaveLid ? (
+                                                        <span className="text-green-400">Yes</span>
+                                                    ) : (
+                                                        <span className="text-theme-secondary">No</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                                     <span className={`text-sm font-bold ${product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'}`}>
@@ -502,11 +608,10 @@ export default function ProductsPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                    SKU *
+                                    SKU
                                 </label>
                                 <input
                                     type="text"
-                                    required
                                     value={formData.sku}
                                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                                     className="input-field"
@@ -549,7 +654,7 @@ export default function ProductsPage() {
                                 </div>
                             </div>
 
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
                                     Supplier *
                                 </label>
@@ -564,7 +669,7 @@ export default function ProductsPage() {
                                         <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
                                     ))}
                                 </select>
-                            </div>
+                            </div> */}
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
@@ -583,12 +688,11 @@ export default function ProductsPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                    Cost (LKR) *
+                                    Cost (LKR)
                                 </label>
                                 <input
                                     type="number"
                                     step="0.01"
-                                    required
                                     value={formData.cost}
                                     onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
                                     className="input-field"
@@ -610,19 +714,18 @@ export default function ProductsPage() {
                                 />
                             </div>
 
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                    Reorder Level *
+                                    Reorder Level
                                 </label>
                                 <input
                                     type="number"
-                                    required
                                     value={formData.reorderLevel}
                                     onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
                                     className="input-field"
                                     placeholder="0"
                                 />
-                            </div>
+                            </div> */}
                         </div>
 
                         <div>
@@ -636,6 +739,54 @@ export default function ProductsPage() {
                                 rows={3}
                                 placeholder="Enter description"
                             />
+                        </div>
+
+                        <div className="flex items-center gap-2 py-2">
+                            <input
+                                type="checkbox"
+                                id="isHaveLid"
+                                checked={formData.isHaveLid}
+                                onChange={(e) => setFormData({ ...formData, isHaveLid: e.target.checked })}
+                                className="w-4 h-4 rounded border-theme-border text-primary-500 focus:ring-primary-500 bg-theme-surface"
+                            />
+                            <label htmlFor="isHaveLid" className="text-sm font-medium text-theme-secondary cursor-pointer">
+                                Has Lid?
+                            </label>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-theme-secondary mb-3">
+                                Colors
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-theme-surface rounded-lg border border-theme-border">
+                                {colorsList.map(color => (
+                                    <label key={color.id} className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.colorIds.includes(color.id.toString())}
+                                            onChange={(e) => {
+                                                const newColorIds = e.target.checked
+                                                    ? [...formData.colorIds, color.id.toString()]
+                                                    : formData.colorIds.filter(id => id !== color.id.toString());
+                                                setFormData({ ...formData, colorIds: newColorIds });
+                                            }}
+                                            className="w-4 h-4 rounded border-theme-border text-primary-500 focus:ring-primary-500 bg-theme-background"
+                                        />
+                                        <div
+                                            className="w-4 h-4 rounded-full border border-theme-border shadow-sm"
+                                            style={{ backgroundColor: color.hexCode }}
+                                        />
+                                        <span className="text-sm text-theme-primary group-hover:text-primary-400 transition-colors">
+                                            {color.name}
+                                        </span>
+                                    </label>
+                                ))}
+                                {colorsList.length === 0 && (
+                                    <div className="col-span-full text-center py-2 text-theme-secondary text-sm italic">
+                                        No colors defined. Create some using "Manage Colors".
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="flex gap-4 pt-4">
@@ -713,7 +864,87 @@ export default function ProductsPage() {
                         </div>
                     </div>
                 </Modal>
+
+                {/* Colors Management Modal */}
+                <Modal
+                    isOpen={isColorModalOpen}
+                    onClose={() => setIsColorModalOpen(false)}
+                    title="Manage Colors"
+                >
+                    <div className="space-y-6">
+                        <form onSubmit={handleSaveColor} className="space-y-4">
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <input
+                                        type="text"
+                                        value={newColorName}
+                                        onChange={(e) => setNewColorName(e.target.value)}
+                                        placeholder={editingColor ? "Update color name" : "New color name (e.g. Red)"}
+                                        className="input-field"
+                                        required
+                                    />
+                                </div>
+                                <div className="w-20">
+                                    <input
+                                        type="color"
+                                        value={newColorHex}
+                                        onChange={(e) => setNewColorHex(e.target.value)}
+                                        className="w-full h-[42px] p-1 bg-theme-surface rounded-lg border border-theme-border cursor-pointer"
+                                        title="Choose color"
+                                    />
+                                </div>
+                                {editingColor ? (
+                                    <div className="flex gap-2">
+                                        <button type="submit" className="btn-primary whitespace-nowrap">
+                                            Update
+                                        </button>
+                                        <button type="button" onClick={handleCancelColorEdit} className="btn-outline whitespace-nowrap">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button type="submit" className="btn-primary whitespace-nowrap">
+                                        Add Color
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
+                            {colorsList.map(color => (
+                                <div key={color.id} className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-border">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-6 h-6 rounded-full border border-theme-border shadow-sm"
+                                            style={{ backgroundColor: color.hexCode }}
+                                        />
+                                        <span className="text-theme-primary font-medium">{color.name}</span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => handleEditColor(color)}
+                                            className="p-2 hover:bg-theme-background rounded-lg transition-colors text-blue-400"
+                                            title="Edit Color"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteColor(color.id, color.name)}
+                                            className="p-2 hover:bg-theme-background rounded-lg transition-colors text-red-400"
+                                            title="Delete Color"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            {colorsList.length === 0 && (
+                                <p className="col-span-full text-center text-theme-secondary py-4 italic">No colors found</p>
+                            )}
+                        </div>
+                    </div>
+                </Modal>
             </main>
-        </div>
+        </div >
     );
 }

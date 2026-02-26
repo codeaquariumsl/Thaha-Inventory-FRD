@@ -102,6 +102,12 @@ export const createCategory = (data: any) => fetchAPI('/categories', { method: '
 export const updateCategory = (id: string, data: any) => fetchAPI(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteCategory = (id: string) => fetchAPI(`/categories/${id}`, { method: 'DELETE' });
 
+// Colors
+export const getColors = () => fetchAPI('/colors');
+export const createColor = (data: any) => fetchAPI('/colors', { method: 'POST', body: JSON.stringify(data) });
+export const updateColor = (id: string, data: any) => fetchAPI(`/colors/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteColor = (id: string) => fetchAPI(`/colors/${id}`, { method: 'DELETE' });
+
 // Auth
 export const login = (data: any) => fetchAPI('/auth/login', { method: 'POST', body: JSON.stringify(data) });
 

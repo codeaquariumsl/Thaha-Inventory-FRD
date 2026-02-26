@@ -86,14 +86,12 @@ export default function ProfilePage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label className="block text-sm font-medium text-theme-primary mb-2">Username</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <UserCircle className="h-5 w-5 text-gray-500" />
-                                            </div>
+                                        <div className="search-wrapper">
+                                            <UserCircle className="search-icon text-gray-500" />
                                             <input
                                                 type="text"
                                                 required
-                                                className="input-field pl-10 opacity-70 cursor-not-allowed"
+                                                className="input-field search-input opacity-70 cursor-not-allowed"
                                                 value={formData.username}
                                                 readOnly
                                                 title="Username cannot be changed"
@@ -102,14 +100,12 @@ export default function ProfilePage() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-theme-primary mb-2">Email</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <Mail className="h-5 w-5 text-gray-400" />
-                                            </div>
+                                        <div className="search-wrapper">
+                                            <Mail className="search-icon" />
                                             <input
                                                 type="email"
                                                 required
-                                                className="input-field pl-10"
+                                                className="input-field search-input"
                                                 value={formData.email}
                                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                             />
@@ -121,13 +117,11 @@ export default function ProfilePage() {
                                     <label className="block text-sm font-medium text-theme-primary mb-2">
                                         New Password <span className="text-theme-secondary text-xs font-normal">(Leave blank to keep current)</span>
                                     </label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Key className="h-5 w-5 text-gray-400" />
-                                        </div>
+                                    <div className="search-wrapper">
+                                        <Key className="search-icon" />
                                         <input
                                             type="password"
-                                            className="input-field pl-10"
+                                            className="input-field search-input"
                                             value={formData.password}
                                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                             placeholder="••••••••"
@@ -137,11 +131,9 @@ export default function ProfilePage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-theme-primary mb-2">Role</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Shield className="h-5 w-5 text-gray-500" />
-                                        </div>
-                                        <div className="input-field pl-10 flex items-center opacity-70 cursor-not-allowed">
+                                    <div className="search-wrapper">
+                                        <Shield className="search-icon text-gray-500" />
+                                        <div className="input-field search-input flex items-center opacity-70 cursor-not-allowed">
                                             {user.role || 'User'}
                                         </div>
                                     </div>

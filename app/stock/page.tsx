@@ -260,14 +260,14 @@ export default function StockPage() {
 
                     {/* Filters */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
+                        <div className="search-wrapper">
+                            <Search className="search-icon" />
                             <input
                                 type="text"
                                 placeholder="Search movements..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="input-field pl-10"
+                                className="input-field search-input"
                             />
                         </div>
                         <select

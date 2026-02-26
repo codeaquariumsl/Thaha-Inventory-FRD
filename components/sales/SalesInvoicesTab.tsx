@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import { Plus, Search, Eye, Send, DollarSign, CheckSquare, Printer } from 'lucide-react';
 // import { salesInvoices as initialInvoices, customers, deliveryOrders } from '@/data/salesData';
 // import { products } from '@/data/mockData';
-import { SalesInvoice, EnhancedSaleItem, Customer, DeliveryOrder, Product } from '@/types';
+import { SalesInvoice, EnhancedSaleItem, Customer, DeliveryOrder, Product, Color } from '@/types';
 import * as api from '@/lib/api';
 import { generateInvoicePDF } from '@/lib/pdf-generator';
 
@@ -23,7 +23,7 @@ export default function SalesInvoicesTab() {
     const [products, setProducts] = useState<Product[]>([]);
     const [user, setUser] = useState<any>(null);
 
-    const canAccessTax = user?.role === 'admin' || user?.role === 'tax_user';
+    const canAccessTax = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'tax_user';
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -33,12 +33,14 @@ export default function SalesInvoicesTab() {
 
     const loadData = async () => {
         try {
-            const [invData, custData, doData, prodData] = await Promise.all([
+            const [invData, custData, doData, prodData, colorsData] = await Promise.all([
                 api.getInvoices(),
                 api.getCustomers(),
                 api.getDeliveryOrders(),
-                api.getProducts()
+                api.getProducts(),
+                api.getColors()
             ]);
+            setColorsList(colorsData || []);
 
             setInvoices(invData.map((inv: any) => ({
                 ...inv,
@@ -54,19 +56,35 @@ export default function SalesInvoicesTab() {
                 dueDate: new Date(inv.dueDate),
                 createdAt: new Date(inv.createdAt),
                 paidDate: inv.paidDate ? new Date(inv.paidDate) : undefined,
-                items: inv.items ? inv.items.map((item: any) => ({
-                    ...item,
-                    Product: item.Product || { name: item.productName || 'Unknown', uom: item.uom || 'pcs' },
-                    price: parseFloat(item.price) || 0,
-                    quantity: parseInt(item.quantity) || 0,
-                    discount: parseFloat(item.discount) || 0,
-                    tax: parseFloat(item.tax) || 0,
-                    total: parseFloat(item.total) || 0,
-                })) : []
+                items: inv.items ? inv.items.map((item: any) => {
+                    const colorIdStr = item.colorId ? item.colorId.toString() : undefined;
+                    const matchedColor = colorIdStr ? (colorsData || []).find((c: any) => c.id.toString() === colorIdStr) : null;
+                    return {
+                        ...item,
+                        Product: item.Product || { name: item.productName || 'Unknown', uom: item.uom || 'pcs' },
+                        price: parseFloat(item.price) || 0,
+                        quantity: parseInt(item.quantity) || 0,
+                        discount: parseFloat(item.discount) || 0,
+                        tax: parseFloat(item.tax) || 0,
+                        total: parseFloat(item.total) || 0,
+                        colorId: colorIdStr,
+                        colorName: matchedColor?.name || undefined,
+                        isHaveLid: item.Product ? item.Product.isHaveLid : false
+                    };
+                }) : []
             })));
             setCustomers(custData.map((c: any) => ({ ...c, id: c.id.toString() })));
             setDeliveryOrders(doData.map((d: any) => ({ ...d, id: d.id.toString(), customerId: d.customerId.toString() })));
-            setProducts(prodData.map((p: any) => ({ ...p, id: p.id.toString() })));
+            setProducts(prodData.map((p: any) => ({
+                ...p,
+                id: p.id.toString(),
+                price: parseFloat(p.price) || 0,
+                cost: parseFloat(p.cost) || 0,
+                stock: parseInt(p.stockQuantity) || 0,
+                reorderLevel: parseInt(p.reorderLevel) || 0,
+                category: p.Category ? p.Category.name : 'Uncategorized',
+                colors: p.Colors || p.colors || []
+            })));
         } catch (error) {
             console.error("Failed to load invoice data", error);
         }
@@ -85,6 +103,8 @@ export default function SalesInvoicesTab() {
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [discount, setDiscount] = useState('0');
+    const [selectedColor, setSelectedColor] = useState('');
+    const [colorsList, setColorsList] = useState<Color[]>([]);
 
     const filteredInvoices = useMemo(() => {
         return invoices.filter(invoice => {
@@ -168,6 +188,7 @@ export default function SalesInvoicesTab() {
         const itemTax = (itemSubtotal - disc) * 0.1;
         const itemTotal = itemSubtotal - disc + itemTax;
 
+        const color = colorsList.find(c => c.id.toString() === selectedColor);
         setInvoiceItems([...invoiceItems, {
             productId: product.id,
             productName: product.name,
@@ -177,11 +198,15 @@ export default function SalesInvoicesTab() {
             discount: disc,
             tax: itemTax,
             total: itemTotal,
+            colorId: selectedColor || undefined,
+            colorName: color?.name || undefined,
+            isHaveLid: product.isHaveLid
         }]);
 
         setSelectedProduct('');
         setQuantity('1');
         setDiscount('0');
+        setSelectedColor('');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -205,7 +230,10 @@ export default function SalesInvoicesTab() {
         const payload = {
             customerId: formData.customerId,
             salesOrderId: salesOrderId,
-            items: invoiceItems,
+            items: invoiceItems.map(item => ({
+                ...item,
+                colorId: item.colorId || null,
+            })),
             subtotal,
             tax,
             discount: totalDiscount,
@@ -336,9 +364,9 @@ export default function SalesInvoicesTab() {
             {/* Filters */}
             <div className="glass-card p-4 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
-                        <input type="text" placeholder="Search invoices..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field pl-10" />
+                    <div className="search-wrapper">
+                        <Search className="search-icon" />
+                        <input type="text" placeholder="Search invoices..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field search-input" />
                     </div>
                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
                         <option value="all">All Status</option>
@@ -386,8 +414,8 @@ export default function SalesInvoicesTab() {
                                     <span className={`badge ${invoice.status === 'Paid' ? 'badge-success' :
                                         invoice.status === 'Partial' ? 'badge-info' :
                                             invoice.status === 'Sent' ? 'badge-warning' :
-                                                invoice.status === 'Approved' ? 'badge-success' :
-                                                    invoice.status === 'Overdue' ? 'badge-danger' : 'badge-warning'
+                                                invoice.status === 'Approved' ? 'badge-warning' :
+                                                    invoice.status === 'Overdue' ? 'badge-danger' : 'badge-danger'
                                         }`}>
                                         {invoice.status}
                                     </span>
@@ -500,9 +528,9 @@ export default function SalesInvoicesTab() {
                     <div className="border-t border-white/10 pt-6">
                         <h3 className="text-lg font-semibold text-theme-primary mb-4">Add Items</h3>
                         {!formData.deliveryOrderId && (
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
                                 <div className="md:col-span-2">
-                                    <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="input-field">
+                                    <select value={selectedProduct} onChange={(e) => { setSelectedProduct(e.target.value); setSelectedColor(''); }} className="input-field">
                                         <option value="">Select Product</option>
                                         {products.map(product => (
                                             <option key={product.id} value={product.id}>{product.name} - LKR {product.price}</option>
@@ -511,9 +539,17 @@ export default function SalesInvoicesTab() {
                                 </div>
                                 <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="input-field" placeholder="Qty" />
                                 <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field" placeholder="Discount" />
-                                <button type="button" onClick={handleAddItem} className="btn-secondary h-full">Add</button>
+                                <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="input-field">
+                                    <option value="">No Color</option>
+                                    {products.find(p => p.id === selectedProduct)?.colors?.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                                <button type="button" onClick={handleAddItem} className="btn-secondary h-full col-span-1">Add</button>
                             </div>
                         )}
+
+
 
                         {formData.deliveryOrderId && (
                             <p className="text-sm text-blue-400 mb-4">
@@ -523,15 +559,61 @@ export default function SalesInvoicesTab() {
 
                         {invoiceItems.length > 0 && (
                             <div className="space-y-2 mb-4">
-                                {invoiceItems.map((item, index) => (
-                                    <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                                        <div className="flex-1">
-                                            <p className="font-medium text-theme-primary">{item.productName}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                {invoiceItems.map((item, index) => {
+                                    const col = item.colorId ? colorsList.find(c => c.id.toString() === item.colorId) : null;
+                                    return (
+                                        <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-medium text-theme-primary">{item.productName}</p>
+                                                    {col && (
+                                                        <span className="flex items-center gap-1 text-xs text-theme-secondary">
+                                                            <span className="inline-block w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: col.hexCode }} />
+                                                            {col.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <select
+                                                    value={item.colorId || ''}
+                                                    onChange={(e) => {
+                                                        const c = colorsList.find(c => c.id.toString() === e.target.value);
+                                                        setInvoiceItems(invoiceItems.map((ii, i) =>
+                                                            i === index ? { ...ii, colorId: e.target.value || undefined, colorName: c?.name || undefined } : ii
+                                                        ));
+                                                    }}
+                                                    className="bg-transparent border border-white/20 rounded px-1 py-1 text-xs text-theme-secondary focus:outline-none focus:border-primary-500 min-w-[90px]"
+                                                >
+                                                    <option value="">No Color</option>
+                                                    {products.find(p => p.id === item.productId)?.colors?.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                                    ))}
+                                                </select>
+                                                <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
+                                            </div>
                                         </div>
-                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {invoiceItems.some(item => item.isHaveLid) && (
+                            <div className="mt-4 p-4 bg-primary-500/10 rounded-lg border border-primary-500/20">
+                                <h4 className="text-sm font-semibold text-primary-400 mb-2 flex items-center gap-2">
+                                    <span className="text-lg">💡</span> Lid Requirements Summary
+                                </h4>
+                                <div className="space-y-1">
+                                    {invoiceItems.filter(item => item.isHaveLid).map((item, idx) => (
+                                        <div key={idx} className="text-sm text-theme-primary flex justify-between">
+                                            <span>
+                                                <strong>{item.productName}</strong> Lid {item.colorName ? `(${item.colorName})` : ''}
+                                            </span>
+                                            <span className="text-primary-400 font-bold">Qty: {item.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -598,8 +680,13 @@ export default function SalesInvoicesTab() {
                                 {viewingInvoice.items.map((item, index) => (
                                     <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
                                         <div>
-                                            <p className="font-medium text-theme-primary">{item.productName}</p>
+                                            <p className="font-medium text-theme-primary">{item.Product?.name + ' - ' + item.colorName}</p>
                                             <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                            {item.isHaveLid && (
+                                                <p className="text-xs text-primary-400 mt-1 italic">
+                                                    💡 {item.Product?.name + ' - ' + item.colorName} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
+                                                </p>
+                                            )}
                                         </div>
                                         <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
                                     </div>

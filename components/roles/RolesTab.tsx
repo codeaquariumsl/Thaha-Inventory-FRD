@@ -89,12 +89,12 @@ export default function RolesTab() {
             <div className="table-container mb-8">
                 {/* Filters */}
                 <div className="p-4 border-b border-white/10 flex items-center gap-4">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <div className="search-wrapper flex-1 max-w-sm">
+                        <Search className="search-icon" />
                         <input
                             type="text"
                             placeholder="Search roles..."
-                            className="input-field pl-10"
+                            className="input-field search-input"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -174,14 +174,12 @@ export default function RolesTab() {
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
                                 <label className="block text-sm font-medium text-theme-primary mb-1.5">Role Name</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-gray-400" />
-                                    </div>
+                                <div className="search-wrapper">
+                                    <Lock className="search-icon" />
                                     <input
                                         type="text"
                                         required
-                                        className="input-field pl-10"
+                                        className="input-field search-input"
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                         placeholder="e.g. Administrator, Manager"

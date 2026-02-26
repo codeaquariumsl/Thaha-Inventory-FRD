@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import Modal from '@/components/Modal';
 import { Plus, Search, Eye, Edit, Trash2, CheckCircle } from 'lucide-react';
-import { SalesOrder, Customer, Product, EnhancedSaleItem } from '@/types';
+import { SalesOrder, Customer, Product, EnhancedSaleItem, Color } from '@/types';
 import * as api from '@/lib/api';
 // import { products as initialProducts } from '@/data/mockData'; // We will fetch products too
 
@@ -30,12 +30,14 @@ export default function SalesOrdersTab() {
         orderType: 'General' as 'General' | 'Tax',
     });
 
-    const canAccessTax = user?.role === 'admin' || user?.role === 'tax_user';
+    const canAccessTax = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'tax_user';
 
     const [orderItems, setOrderItems] = useState<EnhancedSaleItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [discount, setDiscount] = useState('0');
+    const [selectedColor, setSelectedColor] = useState('');
+    const [colorsList, setColorsList] = useState<Color[]>([]);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -46,11 +48,13 @@ export default function SalesOrdersTab() {
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const [ordersData, customersData, productsData] = await Promise.all([
+            const [ordersData, customersData, productsData, colorsData] = await Promise.all([
                 api.getSalesOrders(),
                 api.getCustomers(),
-                api.getProducts()
+                api.getProducts(),
+                api.getColors()
             ]);
+            setColorsList(colorsData || []);
 
             const mappedOrders = ordersData.map((order: any) => ({
                 ...order,
@@ -68,6 +72,8 @@ export default function SalesOrdersTab() {
                     // Recalculate tax for frontend display consistency (10%)
                     const itemSub = quantity * price;
                     const itemTax = (itemSub - discount) * 0.1;
+                    const colorIdStr = item.colorId ? item.colorId.toString() : undefined;
+                    const matchedColor = colorIdStr ? (colorsData || []).find((c: any) => c.id.toString() === colorIdStr) : null;
 
                     return {
                         ...item,
@@ -79,7 +85,10 @@ export default function SalesOrdersTab() {
                         quantity,
                         discount,
                         tax: itemTax,
-                        total: total || (itemSub - discount + itemTax)
+                        total: total || (itemSub - discount + itemTax),
+                        colorId: colorIdStr,
+                        colorName: matchedColor?.name || undefined,
+                        isHaveLid: item.Product ? item.Product.isHaveLid : false
                     };
                 }) : [],
                 deliveryDate: order.deliveryDate ? new Date(order.deliveryDate) : undefined,
@@ -96,7 +105,8 @@ export default function SalesOrdersTab() {
                 cost: parseFloat(p.cost) || 0,
                 stock: parseInt(p.stockQuantity) || 0,
                 reorderLevel: parseInt(p.reorderLevel) || 0,
-                category: p.Category ? p.Category.name : 'Uncategorized'
+                category: p.Category ? p.Category.name : 'Uncategorized',
+                colors: p.Colors || p.colors || []
             })));
         } catch (error) {
             console.error("Failed to load data", error);
@@ -141,6 +151,15 @@ export default function SalesOrdersTab() {
         setIsModalOpen(true);
     };
 
+    const handleUpdateItemColor = (productId: string, colorId: string) => {
+        const color = colorsList.find(c => c.id.toString() === colorId);
+        setOrderItems(orderItems.map(item =>
+            item.productId === productId
+                ? { ...item, colorId, colorName: color?.name || '' }
+                : item
+        ));
+    };
+
     const handleAddItem = () => {
         if (!selectedProduct || !quantity) return;
 
@@ -162,11 +181,14 @@ export default function SalesOrdersTab() {
         const itemTax = (itemSubtotal - disc) * 0.1;
         const itemTotal = itemSubtotal - disc + itemTax;
 
-        const existingItem = orderItems.find(item => item.productId === product.id.toString());
+        const existingItem = orderItems.find(item =>
+            item.productId === product.id.toString() &&
+            (item.colorId === (selectedColor || undefined))
+        );
 
         if (existingItem) {
             setOrderItems(orderItems.map(item =>
-                item.productId === product.id.toString()
+                item.productId === product.id.toString() && (item.colorId === (selectedColor || undefined))
                     ? {
                         ...item,
                         quantity: item.quantity + qty,
@@ -177,6 +199,7 @@ export default function SalesOrdersTab() {
                     : item
             ));
         } else {
+            const color = colorsList.find(c => c.id.toString() === selectedColor);
             setOrderItems([...orderItems, {
                 productId: product.id.toString(),
                 productName: product.name,
@@ -186,12 +209,16 @@ export default function SalesOrdersTab() {
                 discount: disc,
                 tax: itemTax,
                 total: itemTotal,
+                colorId: selectedColor || undefined,
+                colorName: color?.name || undefined,
+                isHaveLid: product.isHaveLid
             }]);
         }
 
         setSelectedProduct('');
         setQuantity('1');
         setDiscount('0');
+        setSelectedColor('');
     };
 
     const handleRemoveItem = (productId: string) => {
@@ -219,7 +246,8 @@ export default function SalesOrdersTab() {
                 quantity: item.quantity,
                 price: item.price,
                 discount: item.discount,
-                total: item.total
+                total: item.total,
+                colorId: item.colorId || null,
             })),
             subtotal,
             tax,
@@ -320,14 +348,14 @@ export default function SalesOrdersTab() {
             {/* Filters */}
             <div className="glass-card p-4 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-secondary" />
+                    <div className="search-wrapper">
+                        <Search className="search-icon" />
                         <input
                             type="text"
                             placeholder="Search orders..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="input-field pl-10"
+                            className="input-field search-input"
                         />
                     </div>
                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
@@ -384,17 +412,21 @@ export default function SalesOrdersTab() {
                                         <button onClick={() => { setViewingOrder(order); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
                                             <Eye className="w-4 h-4 text-primary-400" />
                                         </button>
-                                        <button onClick={() => handleOpenModal(order)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Edit">
-                                            <Edit className="w-4 h-4 text-blue-400" />
-                                        </button>
+                                        {order.status === 'Draft' && (
+                                            <button onClick={() => handleOpenModal(order)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Edit">
+                                                <Edit className="w-4 h-4 text-blue-400" />
+                                            </button>
+                                        )}
                                         {/* {order.status === 'Draft' && (
                                             <button onClick={() => handleConfirmOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Confirm">
                                                 <CheckCircle className="w-4 h-4 text-green-400" />
                                             </button>
                                         )} */}
-                                        <button onClick={() => handleDeleteOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
-                                            <Trash2 className="w-4 h-4 text-red-400" />
-                                        </button>
+                                        {order.status === 'Draft' && (
+                                            <button onClick={() => handleDeleteOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
+                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                            </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -437,10 +469,10 @@ export default function SalesOrdersTab() {
 
                     <div className="border-t border-white/10 pt-6">
                         <h3 className="text-lg font-semibold text-theme-primary mb-4">Add Items</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Product</label>
-                                <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="input-field">
+                                <select value={selectedProduct} onChange={(e) => { setSelectedProduct(e.target.value); setSelectedColor(''); }} className="input-field">
                                     <option value="">Select Product</option>
                                     {products.map(product => (
                                         <option key={product.id} value={product.id}>{product.name}</option>
@@ -468,7 +500,19 @@ export default function SalesOrdersTab() {
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Discount</label>
                                 <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field" placeholder="Discount" />
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">Color</label>
+                                <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="input-field">
+                                    <option value="">No Color</option>
+                                    {products.find(p => p.id === selectedProduct)?.colors?.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
+
+
+
                         <button type="button" onClick={handleAddItem} className="btn-secondary mb-4">Add Item</button>
 
                         {orderItems.length > 0 && (
@@ -483,6 +527,7 @@ export default function SalesOrdersTab() {
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Discount</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Disc. Price</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Value</th>
+                                            <th className="text-center text-sm font-semibold text-theme-secondary pb-3 px-2">Color</th>
                                             <th className="text-center text-sm font-semibold text-theme-secondary pb-3 pl-2">Action</th>
                                         </tr>
                                     </thead>
@@ -500,6 +545,24 @@ export default function SalesOrdersTab() {
                                                     <td className="py-3 px-2 text-right text-yellow-400">LKR {item.discount.toFixed(2)}</td>
                                                     <td className="py-3 px-2 text-right text-green-400 font-semibold">LKR {discountedPrice.toFixed(2)}</td>
                                                     <td className="py-3 px-2 text-right text-theme-primary font-bold">LKR {lineValue.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <select
+                                                            value={item.colorId || ''}
+                                                            onChange={(e) => handleUpdateItemColor(item.productId, e.target.value)}
+                                                            className="bg-transparent border border-white/20 rounded px-1 py-1 text-xs text-theme-secondary focus:outline-none focus:border-primary-500 min-w-[80px]"
+                                                        >
+                                                            <option value="">None</option>
+                                                            {products.find(p => p.id === item.productId)?.colors?.map(c => (
+                                                                <option key={c.id} value={c.id}>
+                                                                    {c.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        {item.colorId && (() => {
+                                                            const col = colorsList.find(c => c.id.toString() === item.colorId);
+                                                            return col ? <div className="w-3 h-3 rounded-full mx-auto mt-1" style={{ backgroundColor: col.hexCode }} /> : null;
+                                                        })()}
+                                                    </td>
                                                     <td className="py-3 pl-2 text-center">
                                                         <button
                                                             type="button"
@@ -515,6 +578,24 @@ export default function SalesOrdersTab() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+
+                        {orderItems.some(item => item.isHaveLid) && (
+                            <div className="mt-4 p-4 bg-primary-500/10 rounded-lg border border-primary-500/20">
+                                <h4 className="text-sm font-semibold text-primary-400 mb-2 flex items-center gap-2">
+                                    <span className="text-lg">💡</span> Lid Requirements Summary
+                                </h4>
+                                <div className="space-y-1">
+                                    {orderItems.filter(item => item.isHaveLid).map((item, idx) => (
+                                        <div key={idx} className="text-sm text-theme-primary flex justify-between">
+                                            <span>
+                                                <strong>{item.productName}</strong> Lid {item.colorName ? `(${item.colorName})` : ''}
+                                            </span>
+                                            <span className="text-primary-400 font-bold">Qty: {item.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -588,6 +669,11 @@ export default function SalesOrdersTab() {
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
                                             <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                            {item.isHaveLid && (
+                                                <p className="text-xs text-primary-400 mt-1 italic">
+                                                    💡 {item.productName} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
+                                                </p>
+                                            )}
                                         </div>
                                         <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
                                     </div>

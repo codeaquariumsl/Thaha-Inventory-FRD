@@ -87,11 +87,16 @@ export default function Sidebar() {
             >
                 {/* Logo */}
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-lg flex items-center justify-center">
-                        <Package className="w-6 h-6 text-white" />
+                    <div className="h-12 flex items-center justify-center overflow-hidden rounded-lg bg-white/5">
+                        <img
+                            src="/assets/company_logo.jpeg"
+                            alt="Logo"
+                            className={`w-full h-full object-cover transition-all duration-300 ${theme === 'dark' ? 'invert contrast-125' : ''
+                                }`}
+                        />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold gradient-text">CA Inventory</h1>
+                        <h1 className="text-xl font-bold gradient-text">Inventory</h1>
                         <p className="text-xs text-gray-400">Management System</p>
                     </div>
                 </div>

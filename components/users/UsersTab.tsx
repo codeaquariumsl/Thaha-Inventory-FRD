@@ -103,12 +103,12 @@ export default function UsersTab() {
             <div className="table-container mb-8">
                 {/* Filters */}
                 <div className="p-4 border-b border-white/10 flex items-center gap-4">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <div className="search-wrapper flex-1 max-w-sm">
+                        <Search className="search-icon" />
                         <input
                             type="text"
                             placeholder="Search users..."
-                            className="input-field pl-10"
+                            className="input-field search-input"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />

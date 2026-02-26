@@ -15,7 +15,7 @@ export default function UsersPage() {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             const user = JSON.parse(storedUser);
-            if (user?.Role?.name?.toLowerCase() !== 'admin') {
+            if (user?.role?.toLowerCase() !== 'admin') {
                 router.push('/');
             } else {
                 setIsLoading(false);

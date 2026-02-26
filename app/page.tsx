@@ -122,12 +122,12 @@ export default function Home() {
             if (sale.status === 'Completed' || sale.status === 'Confirmed') {
                 sale.items.forEach(item => {
                     const existing = productSales.get(item.productId) || {
-                        name: item.productName,
+                        name: item.Product?.name || 'Unknown',
                         quantity: 0,
                         revenue: 0
                     };
                     productSales.set(item.productId, {
-                        name: item.productName,
+                        name: item.Product?.name || 'Unknown',
                         quantity: existing.quantity + item.quantity,
                         revenue: existing.revenue + (item.total || 0),
                     });

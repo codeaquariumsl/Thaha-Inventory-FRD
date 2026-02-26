@@ -14,6 +14,9 @@ export interface Product {
     supplier: string;
     uom: string; // Unit of Measurement (e.g., 'pcs', 'kg', 'ltr', 'box')
     imageUrl?: string;
+    isHaveLid?: boolean;
+    colors?: Color[];
+    colorIds?: string[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -99,6 +102,13 @@ export interface Category {
     description: string;
 }
 
+// Color Type
+export interface Color {
+    id: string;
+    name: string;
+    hexCode?: string;
+}
+
 // Supplier Type
 export interface Supplier {
     id: string;
@@ -139,6 +149,10 @@ export interface EnhancedSaleItem {
     discount: number;
     tax: number;
     total: number;
+    notes?: string;
+    colorId?: string;
+    colorName?: string;
+    isHaveLid?: boolean;
     Product?: {
         name: string;
         uom: string;
