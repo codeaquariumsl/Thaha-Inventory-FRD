@@ -783,7 +783,7 @@ export default function ProductsPage() {
                                 ))}
                                 {colorsList.length === 0 && (
                                     <div className="col-span-full text-center py-2 text-theme-secondary text-sm italic">
-                                        No colors defined. Create some using "Manage Colors".
+                                        No colors defined. Create some using &quot;Manage Colors&quot;.
                                     </div>
                                 )}
                             </div>

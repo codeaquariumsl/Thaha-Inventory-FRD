@@ -116,7 +116,7 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     // --- Table ---
     const tableData = invoice.items.map((item, index) => [
         index + 1,
-        item.Product?.name + ' - ' + item.colorName || 'Unknown',
+        (item.Product?.name || item.productName || 'Unknown') + (item.colorName ? ` - ${item.colorName}` : ''),
         item.quantity,
         item.Product?.uom || item.uom || 'pcs',
         `LKR ${item.price.toFixed(2)}`,
@@ -248,7 +248,7 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
 
     const tableData = delivery.items.map((item, index) => [
         index + 1,
-        item.Product?.name + ' - ' + item.colorName || 'Unknown',
+        (item.Product?.name || item.productName || 'Unknown') + (item.colorName ? ` - ${item.colorName}` : ''),
         item.quantity,
         item.Product?.uom || item.uom || 'pcs',
         item.notes || ''

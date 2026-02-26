@@ -680,11 +680,11 @@ export default function SalesInvoicesTab() {
                                 {viewingInvoice.items.map((item, index) => (
                                     <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
                                         <div>
-                                            <p className="font-medium text-theme-primary">{item.Product?.name + ' - ' + item.colorName}</p>
+                                            <p className="font-medium text-theme-primary">{item.Product?.name || item.productName || 'Unknown'}{item.colorName ? ` - ${item.colorName}` : ''}</p>
                                             <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
                                             {item.isHaveLid && (
                                                 <p className="text-xs text-primary-400 mt-1 italic">
-                                                    💡 {item.Product?.name + ' - ' + item.colorName} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
+                                                    💡 {item.Product?.name || item.productName || 'Unknown'}{item.colorName ? ` - ${item.colorName}` : ''} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
                                                 </p>
                                             )}
                                         </div>

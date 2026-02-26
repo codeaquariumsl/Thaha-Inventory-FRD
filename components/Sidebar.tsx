@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
@@ -88,9 +89,11 @@ export default function Sidebar() {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                     <div className="h-12 flex items-center justify-center overflow-hidden rounded-lg bg-white/5">
-                        <img
+                        <Image
                             src="/assets/company_logo.jpeg"
                             alt="Logo"
+                            width={48}
+                            height={48}
                             className={`w-full h-full object-cover transition-all duration-300 ${theme === 'dark' ? 'invert contrast-125' : ''
                                 }`}
                         />
