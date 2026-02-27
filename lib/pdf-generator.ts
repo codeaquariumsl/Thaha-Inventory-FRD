@@ -26,24 +26,24 @@ const loadImage = (url: string): Promise<string> => {
 export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     // ... (existing code)
     // Create new jsPDF instance: unit=mm, format=[width, height]
-    // A5 Landscape: 210mm x 148mm
+    // A5 landscape: 210mm x 148mm
     const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: [148, 210] // [height, width] for landscape A5 or just 'a5' with orientation 'landscape'
+        format: [210, 148] // [height, width] for landscape A5 or just 'a5' with orientation 'landscape'
     });
 
     // --- Colors & Styling ---
-    const primaryColor: [number, number, number] = [41, 128, 185]; // Professional Blue
-    const secondaryColor: [number, number, number] = [52, 73, 94]; // Dark Slate
-    const accentColor: [number, number, number] = [127, 140, 141]; // Grey
-    const textColor: [number, number, number] = [44, 62, 80];
+    const primaryColor: [number, number, number] = [0, 0, 0];//[41, 128, 185]; // Professional Blue
+    const secondaryColor: [number, number, number] = [0, 0, 0];//[52, 73, 94]; // Dark Slate
+    const accentColor: [number, number, number] = [0, 0, 0];//[127, 140, 141]; // Grey
+    const textColor: [number, number, number] = [0, 0, 0];//[44, 62, 80];
 
     // --- Header ---
     // Company Logo
     try {
         const logoData = await loadImage('/assets/company_logo.jpeg');
-        doc.addImage(logoData, 'JPEG', 10, 8, 25, 25);
+        doc.addImage(logoData, 'JPEG', 10, 6, 25, 25);
     } catch (e) {
         console.error("Could not load logo", e);
     }
@@ -128,7 +128,7 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
         startY: 65,
         head: [['#', 'Description', 'Qty', 'UOM', 'Unit Price', 'Discount', 'Total']],
         body: tableData,
-        theme: 'striped',
+        theme: 'grid',
         headStyles: {
             fillColor: secondaryColor,
             textColor: [255, 255, 255],
@@ -184,10 +184,10 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
         format: [148, 210]
     });
 
-    const primaryColor: [number, number, number] = [41, 128, 185];
-    const secondaryColor: [number, number, number] = [52, 73, 94];
-    const accentColor: [number, number, number] = [127, 140, 141];
-    const textColor: [number, number, number] = [44, 62, 80];
+    const primaryColor: [number, number, number] = [0, 0, 0];//[41, 128, 185];
+    const secondaryColor: [number, number, number] = [0, 0, 0];//[52, 73, 94];
+    const accentColor: [number, number, number] = [0, 0, 0];//[127, 140, 141];
+    const textColor: [number, number, number] = [0, 0, 0];//[44, 62, 80];
 
     try {
         const logoData = await loadImage('/assets/company_logo.jpeg');
@@ -258,7 +258,7 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
         startY: 70,
         head: [['#', 'Description', 'Qty', 'UOM', 'Remarks']],
         body: tableData,
-        theme: 'striped',
+        theme: 'grid',
         headStyles: {
             fillColor: secondaryColor,
             textColor: [255, 255, 255],
