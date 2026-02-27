@@ -139,7 +139,7 @@ export default function LoginPage() {
 
                 <div className="pt-2 text-center">
                     <p className="text-xs text-white/40">
-                        Don't have an account? <button type="button" className="font-bold text-primary-400/80 hover:text-primary-400 hover:underline">Contact Administrator</button>
+                        Don&apos;t have an account? <button type="button" className="font-bold text-primary-400/80 hover:text-primary-400 hover:underline">Contact Administrator</button>
                     </p>
                 </div>
             </div>
