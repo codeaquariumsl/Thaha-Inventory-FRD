@@ -45,6 +45,9 @@ const config: Config = {
                 'theme-primary': 'var(--text-primary)',
                 'theme-secondary': 'var(--text-secondary)',
             },
+            placeholderColor: {
+                'theme-secondary': 'var(--text-secondary)',
+            },
             backgroundImage: {
                 'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
                 'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',

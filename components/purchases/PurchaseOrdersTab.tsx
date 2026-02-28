@@ -328,18 +328,18 @@ export default function PurchaseOrdersTab() {
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleViewPurchase(purchase)}
-                                                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                                className="p-2 hover:bg-theme-hover rounded-lg transition-colors"
                                                 title="View Details"
                                             >
-                                                <Eye className="w-4 h-4 text-primary-400" />
+                                                <Eye className="w-4 h-4 text-primary-500" />
                                             </button>
                                             {purchase.status === 'pending' && (
                                                 <button
                                                     onClick={() => handleReceivePurchase(purchase.id)}
-                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                                    className="p-2 hover:bg-theme-hover rounded-lg transition-colors"
                                                     title="Mark as Received"
                                                 >
-                                                    <CheckCircle className="w-4 h-4 text-green-400" />
+                                                    <CheckCircle className="w-4 h-4 text-green-500" />
                                                 </button>
                                             )}
                                         </div>
@@ -429,7 +429,7 @@ export default function PurchaseOrdersTab() {
                         {purchaseItems.length > 0 && (
                             <div className="space-y-2 mb-4">
                                 {purchaseItems.map((item) => (
-                                    <div key={item.productId} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                    <div key={item.productId} className="flex items-center justify-between p-3 bg-theme-surface rounded-lg">
                                         <div className="flex-1">
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
                                             <p className="text-sm text-theme-secondary">
@@ -441,9 +441,9 @@ export default function PurchaseOrdersTab() {
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemoveItem(item.productId)}
-                                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                                className="p-1 hover:bg-theme-hover rounded transition-colors"
                                             >
-                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                                <Trash2 className="w-4 h-4 text-red-500" />
                                             </button>
                                         </div>
                                     </div>
@@ -454,7 +454,7 @@ export default function PurchaseOrdersTab() {
 
                     {/* Totals */}
                     {purchaseItems.length > 0 && (
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                        <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
                                 <span>LKR {totals.subtotal.toFixed(2)}</span>
@@ -516,7 +516,7 @@ export default function PurchaseOrdersTab() {
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Items</h3>
                             <div className="space-y-2">
                                 {viewingPurchase.items && viewingPurchase.items.map((item, index) => (
-                                    <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
+                                    <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
                                             <p className="text-sm text-theme-secondary">
@@ -529,7 +529,7 @@ export default function PurchaseOrdersTab() {
                             </div>
                         </div>
 
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                        <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
                                 <span>LKR {viewingPurchase.subtotal.toFixed(2)}</span>

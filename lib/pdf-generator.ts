@@ -26,11 +26,11 @@ const loadImage = (url: string): Promise<string> => {
 export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     // ... (existing code)
     // Create new jsPDF instance: unit=mm, format=[width, height]
-    // A5 landscape: 210mm x 148mm
+    // A5 landscape: 210mm x 148mm portrait
     const doc = new jsPDF({
-        orientation: 'landscape',
+        orientation: 'portrait',
         unit: 'mm',
-        format: [210, 148] // [height, width] for landscape A5 or just 'a5' with orientation 'landscape'
+        format: [297, 210]
     });
 
     // --- Colors & Styling ---
@@ -43,7 +43,7 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     // Company Logo
     try {
         const logoData = await loadImage('/assets/company_logo.jpeg');
-        doc.addImage(logoData, 'JPEG', 10, 6, 25, 25);
+        doc.addImage(logoData, 'JPEG', 10, 0, 25, 25);
     } catch (e) {
         console.error("Could not load logo", e);
     }
@@ -51,14 +51,14 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     doc.setFontSize(22);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('Thaha Plastic Industries', 40, 15);
+    doc.text('Thaha Plastic Industries', 40, 10);
 
     doc.setFontSize(9);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'normal');
-    doc.text('No: 05, Muhandiram Lane, Colombo-12', 40, 20);
-    doc.text('Phone: 0112247476 / 0773500852', 40, 24);
-    doc.text('Email: info@thaha-inventory.com', 40, 28);
+    doc.text('No: 05, Muhandiram Lane, Colombo-12', 40, 15);
+    doc.text('Phone: 0112247476 / 0773500852', 40, 19);
+    doc.text('Email: thahaplastics@gmail.com', 40, 23);
 
     // Conditional Title and Tax Number
     const isTaxInvoice = invoice.orderType === 'Tax';
@@ -67,7 +67,7 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
     doc.setFontSize(18);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text(title, 200, 15, { align: 'right' });
+    doc.text(title, 200, 10, { align: 'right' });
 
     doc.setFontSize(10);
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
@@ -75,12 +75,12 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
 
     if (isTaxInvoice) {
         doc.setFont('helvetica', 'bold');
-        doc.text('Tax Registration No:', 200, 20, { align: 'right' });
+        doc.text('Tax Registration No:', 200, 15, { align: 'right' });
         doc.setFont('helvetica', 'normal');
-        doc.text('409009670-7000', 200, 24, { align: 'right' });
+        doc.text('409009670-7000', 200, 19, { align: 'right' });
 
-        doc.text(`Invoice #: ${invoice.invoiceNumber}`, 200, 30, { align: 'right' });
-        doc.text(`Date: ${new Date(invoice.invoiceDate).toLocaleDateString()}`, 200, 34, { align: 'right' });
+        doc.text(`Invoice #: ${invoice.invoiceNumber}`, 200, 25, { align: 'right' });
+        doc.text(`Date: ${new Date(invoice.invoiceDate).toLocaleDateString()}`, 200, 29, { align: 'right' });
     } else {
         doc.text(`Invoice #: ${invoice.invoiceNumber}`, 200, 20, { align: 'right' });
         doc.text(`Date: ${new Date(invoice.invoiceDate).toLocaleDateString()}`, 200, 24, { align: 'right' });
@@ -88,30 +88,30 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
 
     // --- Client Information ---
     doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-    const lineY = isTaxInvoice ? 42 : 32;
+    const lineY = isTaxInvoice ? 35 : 25;
     doc.line(10, lineY, 200, lineY);
 
-    const clientY = lineY + 8;
+    const clientY = lineY + 5;
     doc.setFont('helvetica', 'bold');
     doc.text('BILL TO:', 10, clientY);
     doc.setFont('helvetica', 'normal');
-    doc.text(invoice.customerName, 10, clientY + 5);
+    doc.text(invoice.customerName, 30, clientY);
 
     const customer: any = (invoice as any).Customer;
     if (customer) {
-        if (customer.address) doc.text(customer.address, 10, clientY + 10);
-        if (customer.city) doc.text(customer.city, 10, clientY + 14);
-        if (customer.phone) doc.text(`Phone: ${customer.phone}`, 10, clientY + 18);
+        let address = "";
+        let phone = "";
+        if (customer.address) address += customer.address;
+        if (customer.city) address += ", " + customer.city;
+        if (customer.phone) phone = `Phone: ${customer.phone}`;
+        doc.text(address, 30, clientY + 5);
+        doc.text(phone, 30, clientY + 10);
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.text('INVOICE TYPE:', 150, 40);
+    doc.text('PAYMENT TERMS:', 150, clientY);
     doc.setFont('helvetica', 'normal');
-    doc.text(invoice.orderType || 'General', 150, 45);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PAYMENT TERMS:', 150, 50);
-    doc.setFont('helvetica', 'normal');
-    doc.text(invoice.paymentTerms || 'Net 30', 150, 55);
+    doc.text(invoice.paymentTerms || 'Net 30', 150, clientY + 5);
 
     // --- Table ---
     const tableData = invoice.items.map((item, index) => [
@@ -120,49 +120,58 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
         item.quantity,
         item.Product?.uom || item.uom || 'pcs',
         `LKR ${item.price.toFixed(2)}`,
-        item.discount > 0 ? `LKR ${item.discount.toFixed(2)}` : '0.00',
+        // item.discount > 0 ? `LKR ${item.discount.toFixed(2)}` : '0.00',
         `LKR ${item.total.toFixed(2)}`
     ]);
 
     autoTable(doc, {
-        startY: 65,
-        head: [['#', 'Description', 'Qty', 'UOM', 'Unit Price', 'Discount', 'Total']],
+        startY: 45,
+        head: [['#', 'Description', 'Qty', 'UOM', 'Unit Price', 'Total']],
         body: tableData,
         theme: 'grid',
         headStyles: {
-            fillColor: secondaryColor,
-            textColor: [255, 255, 255],
-            fontSize: 9,
-            cellPadding: 2
+            fillColor: [255, 255, 255],
+            textColor: [0, 0, 0],
+            fontSize: 10,
+            fontStyle: 'bold',
+            halign: 'center',
+            cellPadding: 2,
+            lineColor: [41, 128, 185],
+            lineWidth: 0.3
         },
         bodyStyles: {
-            fontSize: 8,
-            cellPadding: 1.5
+            fontSize: 10,
+            fontStyle: 'bold',
+            textColor: [0, 0, 0],
+            cellPadding: 2,
+            lineColor: [41, 128, 185],
+            lineWidth: 0.3
         },
         columnStyles: {
             0: { cellWidth: 10 },
-            4: { halign: 'right' },
-            5: { halign: 'right' },
-            6: { halign: 'right' }
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 18, halign: 'center' },
+            3: { cellWidth: 18, halign: 'center' },
+            4: { cellWidth: 30, halign: 'right' },
+            5: { cellWidth: 30, halign: 'right' }
         },
+        tableWidth: 190,
         margin: { left: 10, right: 10 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const finalY = (doc as any).lastAutoTable.finalY + 5;
 
-    doc.setFontSize(9);
-    doc.text('Subtotal:', 140, finalY);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Subtotal:', 150, finalY);
     doc.text(`LKR ${invoice.subtotal.toFixed(2)}`, 200, finalY, { align: 'right' });
 
-    doc.text('Discount:', 140, finalY + 5);
-    doc.text(`- LKR ${invoice.discount.toFixed(2)}`, 200, finalY + 5, { align: 'right' });
-
-    doc.text('Tax (10%):', 140, finalY + 10);
-    doc.text(`LKR ${invoice.tax.toFixed(2)}`, 200, finalY + 10, { align: 'right' });
+    doc.text('Tax:', 150, finalY + 6);
+    doc.text(`LKR ${invoice.tax.toFixed(2)}`, 200, finalY + 6, { align: 'right' });
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Amount:', 140, finalY + 18);
-    doc.text(`LKR ${invoice.total.toFixed(2)}`, 200, finalY + 18, { align: 'right' });
+    doc.text('Total Amount:', 150, finalY + 12);
+    doc.text(`LKR ${invoice.total.toFixed(2)}`, 200, finalY + 12, { align: 'right' });
 
     if (invoice.notes) {
         doc.text('NOTES:', 10, finalY);
@@ -171,17 +180,40 @@ export const generateInvoicePDF = async (invoice: SalesInvoice) => {
 
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(7);
-    doc.text('Thank you for your business!', 105, pageHeight - 10, { align: 'center' });
-    doc.text('Generated by Thaha Plastic Industries', 105, pageHeight - 6, { align: 'center' });
+    doc.text('Thank you for your business!', 105, finalY + 20, { align: 'center' });
+    // doc.text('Generated by Thaha Plastic Industries', 105, finalY + 24, { align: 'center' });
+
+    // Auto print logic
+    doc.autoPrint();
+    const hiddFrame = document.createElement('iframe');
+    hiddFrame.style.position = 'fixed';
+    hiddFrame.style.width = '1px';
+    hiddFrame.style.height = '1px';
+    hiddFrame.style.top = '-1px';
+    hiddFrame.style.left = '-1px';
+    const blob = doc.output('blob');
+    hiddFrame.src = URL.createObjectURL(blob);
+    document.body.appendChild(hiddFrame);
+
+    // Some browsers might need a small delay or onload
+    hiddFrame.onload = () => {
+        if (hiddFrame.contentWindow) {
+            hiddFrame.contentWindow.print();
+            // Remove the iframe after a delay to ensure printing is initiated
+            setTimeout(() => {
+                document.body.removeChild(hiddFrame);
+            }, 5000);
+        }
+    };
 
     doc.save(`Invoice_${invoice.invoiceNumber}.pdf`);
 };
 
 export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
     const doc = new jsPDF({
-        orientation: 'landscape',
+        orientation: 'portrait',
         unit: 'mm',
-        format: [148, 210]
+        format: [297, 210]
     });
 
     const primaryColor: [number, number, number] = [0, 0, 0];//[41, 128, 185];
@@ -191,7 +223,7 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
 
     try {
         const logoData = await loadImage('/assets/company_logo.jpeg');
-        doc.addImage(logoData, 'JPEG', 10, 8, 25, 25);
+        doc.addImage(logoData, 'JPEG', 10, 0, 25, 25);
     } catch (e) {
         console.error("Could not load logo", e);
     }
@@ -199,51 +231,58 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
     doc.setFontSize(22);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('Thaha Plastic Industries', 40, 15);
+    doc.text('Thaha Plastic Industries', 40, 10);
 
     doc.setFontSize(9);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'normal');
-    doc.text('No: 05, Muhandiram Lane, Colombo-12', 40, 20);
-    doc.text('Phone: 0112247476 / 0773500852', 40, 24);
-    doc.text('Email: info@thaha-inventory.com', 40, 28);
+    doc.text('No: 05, Muhandiram Lane, Colombo-12', 40, 15);
+    doc.text('Phone: 0112247476 / 0773500852', 40, 19);
+    doc.text('Email: thahaplastics@gmail.com', 40, 23);
 
     doc.setFontSize(18);
     doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('DELIVERY ORDER', 200, 15, { align: 'right' });
+    doc.text('DELIVERY ORDER', 200, 10, { align: 'right' });
 
     doc.setFontSize(10);
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
     doc.setFont('helvetica', 'normal');
-    doc.text(`DO #: ${delivery.deliveryNumber}`, 200, 20, { align: 'right' });
-    doc.text(`Order #: ${delivery.salesOrderNumber}`, 200, 24, { align: 'right' });
-    doc.text(`Date: ${delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString() : new Date(delivery.createdAt).toLocaleDateString()}`, 200, 28, { align: 'right' });
+    doc.text(`DO #: ${delivery.deliveryNumber}`, 200, 19, { align: 'right' });
+    // doc.text(`Order #: ${delivery.salesOrderNumber}`, 200, 19, { align: 'right' });
+    doc.text(`Date: ${delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString() : new Date(delivery.createdAt).toLocaleDateString()}`, 200, 23, { align: 'right' });
 
     doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-    doc.line(10, 35, 200, 35);
+    doc.line(10, 25, 200, 25);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('SHIP TO:', 10, 43);
+    doc.text('DELIVER TO:', 10, 30);
     doc.setFont('helvetica', 'normal');
-    doc.text(delivery.customerName, 10, 48);
-    doc.text(delivery.deliveryAddress, 10, 53, { maxWidth: 100 });
+    doc.text(delivery.customerName, 40, 30);
 
-    const customer: any = delivery.Customer;
-    if (customer && customer.phone) {
-        doc.text(`Phone: ${customer.phone}`, 10, 63);
+    const customer: any = delivery.deliveryAddress || delivery.SalesOrder?.Customer;
+    if (customer) {
+        let address = "";
+        let phone = "";
+        if (customer.address) address += customer.address;
+        if (customer.city) address += ", " + customer.city;
+        if (customer.phone) phone = `Phone: ${customer.phone}`;
+        doc.text(address, 40, 35);
+        if (phone) {
+            doc.text(phone, 40, 40);
+        }
     }
 
-    doc.setFont('helvetica', 'bold');
-    doc.text('ORDER TYPE:', 150, 43);
-    doc.setFont('helvetica', 'normal');
-    doc.text(delivery.orderType || 'General', 150, 48);
+    // doc.setFont('helvetica', 'bold');
+    // doc.text('ORDER TYPE:', 150, 43);
+    // doc.setFont('helvetica', 'normal');
+    // doc.text(delivery.orderType || 'General', 150, 48);
 
     if (delivery.trackingNumber) {
         doc.setFont('helvetica', 'bold');
-        doc.text('TRACKING #:', 150, 53);
+        doc.text('TRACKING #:', 150, 30);
         doc.setFont('helvetica', 'normal');
-        doc.text(delivery.trackingNumber, 150, 58);
+        doc.text(delivery.trackingNumber, 150, 35);
     }
 
     const tableData = delivery.items.map((item, index) => [
@@ -255,29 +294,40 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
     ]);
 
     autoTable(doc, {
-        startY: 70,
+        startY: 45,
         head: [['#', 'Description', 'Qty', 'UOM', 'Remarks']],
         body: tableData,
         theme: 'grid',
         headStyles: {
-            fillColor: secondaryColor,
-            textColor: [255, 255, 255],
-            fontSize: 9,
-            cellPadding: 2
+            fillColor: [255, 255, 255],
+            textColor: [0, 0, 0],
+            fontSize: 10,
+            fontStyle: 'bold',
+            halign: 'center',
+            cellPadding: 2,
+            lineColor: [41, 128, 185],
+            lineWidth: 0.3
         },
         bodyStyles: {
-            fontSize: 8,
-            cellPadding: 1.5
+            fontSize: 10,
+            fontStyle: 'bold',
+            textColor: [0, 0, 0],
+            cellPadding: 2,
+            lineColor: [41, 128, 185],
+            lineWidth: 0.3
         },
         columnStyles: {
             0: { cellWidth: 10 },
-            3: { halign: 'center', cellWidth: 20 },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 18, halign: 'center' },
+            3: { cellWidth: 18, halign: 'center' },
             4: { cellWidth: 'auto' }
         },
+        tableWidth: 190,
         margin: { left: 10, right: 10 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
@@ -289,14 +339,36 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
 
     if (delivery.notes) {
         doc.setFont('helvetica', 'normal');
-        doc.text('NOTES:', 10, finalY + 20);
-        doc.text(delivery.notes, 10, finalY + 24, { maxWidth: 180 });
+        doc.text('NOTES:', 10, finalY + 15);
+        doc.text(delivery.notes, 10, finalY + 19, { maxWidth: 180 });
     }
 
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('Generated by Thaha Plastic Industries', 105, pageHeight - 6, { align: 'center' });
+    doc.text('Generated by Thaha Plastic Industries', 105, finalY + 30, { align: 'center' });
+
+    // Auto print logic
+    doc.autoPrint();
+    const hiddFrame = document.createElement('iframe');
+    hiddFrame.style.position = 'fixed';
+    hiddFrame.style.width = '1px';
+    hiddFrame.style.height = '1px';
+    hiddFrame.style.top = '-1px';
+    hiddFrame.style.left = '-1px';
+    const blob = doc.output('blob');
+    hiddFrame.src = URL.createObjectURL(blob);
+    document.body.appendChild(hiddFrame);
+
+    hiddFrame.onload = () => {
+        if (hiddFrame.contentWindow) {
+            hiddFrame.contentWindow.print();
+            // Remove the iframe after a delay to ensure printing is initiated
+            setTimeout(() => {
+                document.body.removeChild(hiddFrame);
+            }, 5000);
+        }
+    };
 
     doc.save(`DeliveryOrder_${delivery.deliveryNumber}.pdf`);
 };

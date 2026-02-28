@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -34,29 +35,16 @@ export default function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    const { theme, toggleTheme } = useTheme();
     const [user, setUser] = useState<any>(null);
 
-    // Load theme and user from localStorage on mount
+    // Load user from localStorage on mount
     useEffect(() => {
-        const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        if (savedTheme) {
-            setTheme(savedTheme);
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
         }
     }, []);
-
-    const toggleTheme = () => {
-        const newTheme = theme === 'dark' ? 'light' : 'dark';
-        setTheme(newTheme);
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-    };
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -72,9 +60,9 @@ export default function Sidebar() {
                 className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg glass-card"
             >
                 {isMobileMenuOpen ? (
-                    <X className="w-6 h-6 text-white" />
+                    <X className="w-6 h-6 text-theme-primary" />
                 ) : (
-                    <Menu className="w-6 h-6 text-white" />
+                    <Menu className="w-6 h-6 text-theme-primary" />
                 )}
             </button>
 
@@ -100,7 +88,7 @@ export default function Sidebar() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold gradient-text">Inventory</h1>
-                        <p className="text-xs text-gray-400">Management System</p>
+                        <p className="text-xs text-theme-secondary">Management System</p>
                     </div>
                 </div>
 
@@ -124,7 +112,7 @@ export default function Sidebar() {
                   flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300
                   ${isActive
                                         ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
-                                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                        : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'
                                     }
                 `}
                             >
@@ -136,17 +124,17 @@ export default function Sidebar() {
                 </nav>
 
                 {/* Footer */}
-                <div className="pt-6 border-t border-white/10 space-y-4">
+                <div className="pt-6 border-t border-theme-border space-y-4">
                     {/* Theme Toggle */}
                     <button
                         onClick={toggleTheme}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all duration-300 group"
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-theme-surface hover:bg-theme-hover transition-all duration-300 group"
                         title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
                     >
-                        <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+                        <span className="text-sm font-medium text-theme-secondary group-hover:text-theme-primary transition-colors">
                             {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
                         </span>
-                        <div className="relative w-12 h-6 bg-white/10 rounded-full transition-all duration-300">
+                        <div className="relative w-12 h-6 bg-theme-hover rounded-full transition-all duration-300">
                             <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center transition-transform duration-300 ${theme === 'light' ? 'translate-x-6' : 'translate-x-0'}`}>
                                 {theme === 'dark' ? (
                                     <Moon className="w-3 h-3 text-white" />
@@ -158,19 +146,19 @@ export default function Sidebar() {
                     </button>
 
                     {/* User Info */}
-                    <div className="border-t border-white/10 pt-4 mt-2">
-                        <Link href="/profile" className="flex items-center gap-3 hover:bg-white/5 p-2 rounded-lg transition-colors mb-2">
+                    <div className="border-t border-theme-border pt-4 mt-2">
+                        <Link href="/profile" className="flex items-center gap-3 hover:bg-theme-hover p-2 rounded-lg transition-colors mb-2">
                             <div className="w-10 h-10 bg-gradient-to-br from-accent-500 to-primary-500 rounded-full flex items-center justify-center text-white font-semibold">
                                 <UserCircle className="w-6 h-6" />
                             </div>
                             <div className="overflow-hidden">
-                                <p className="text-sm font-semibold text-white truncate">{user?.username || 'User'}</p>
-                                <p className="text-xs text-gray-400 truncate">{user?.email || 'View Profile'}</p>
+                                <p className="text-sm font-semibold text-theme-primary truncate">{user?.username || 'User'}</p>
+                                <p className="text-xs text-theme-secondary truncate">{user?.email || 'View Profile'}</p>
                             </div>
                         </Link>
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-3 px-2 py-2 text-red-400 hover:bg-white/5 rounded-lg transition-colors"
+                            className="w-full flex items-center gap-3 px-2 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                         >
                             <LogOut className="w-5 h-5" />
                             <span className="font-medium">Logout</span>

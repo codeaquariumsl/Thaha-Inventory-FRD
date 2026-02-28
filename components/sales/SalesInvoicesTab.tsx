@@ -422,29 +422,29 @@ export default function SalesInvoicesTab() {
                                 </td>
                                 <td>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setViewingInvoice(invoice); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
-                                            <Eye className="w-4 h-4 text-primary-400" />
+                                        <button onClick={() => { setViewingInvoice(invoice); setIsViewModalOpen(true); }} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="View">
+                                            <Eye className="w-4 h-4 text-primary-500" />
                                         </button>
                                         {invoice.status === 'Approved' && (
-                                            <button onClick={() => handlePrintInvoice(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Print Invoice">
-                                                <Printer className="w-4 h-4 text-blue-400" />
+                                            <button onClick={() => handlePrintInvoice(invoice.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Print Invoice">
+                                                <Printer className="w-4 h-4 text-blue-500" />
                                             </button>
                                         )}
                                         {/* {invoice.status === 'Draft' && (
                                             <>
-                                                <button onClick={() => handleApprove(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Approve">
-                                                    <CheckSquare className="w-4 h-4 text-green-400" />
+                                                <button onClick={() => handleApprove(invoice.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Approve">
+                                                    <CheckSquare className="w-4 h-4 text-green-500" />
                                                 </button>
                                             </>
                                         )}
                                         {invoice.status === 'Approved' && (
-                                            <button onClick={() => handleSendInvoice(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Send">
-                                                <Send className="w-4 h-4 text-blue-400" />
+                                            <button onClick={() => handleSendInvoice(invoice.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Send">
+                                                <Send className="w-4 h-4 text-blue-500" />
                                             </button>
                                         )}
                                         {(invoice.status === 'Sent' || invoice.status === 'Partial') && (
-                                            <button onClick={() => handleMarkPaid(invoice.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Mark Paid">
-                                                <DollarSign className="w-4 h-4 text-green-400" />
+                                            <button onClick={() => handleMarkPaid(invoice.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Mark Paid">
+                                                <DollarSign className="w-4 h-4 text-green-500" />
                                             </button>
                                         )} */}
                                     </div>
@@ -525,7 +525,7 @@ export default function SalesInvoicesTab() {
                         )}
                     </div>
 
-                    <div className="border-t border-white/10 pt-6">
+                    <div className="border-t border-theme-border pt-6">
                         <h3 className="text-lg font-semibold text-theme-primary mb-4">Add Items</h3>
                         {!formData.deliveryOrderId && (
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
@@ -562,7 +562,7 @@ export default function SalesInvoicesTab() {
                                 {invoiceItems.map((item, index) => {
                                     const col = item.colorId ? colorsList.find(c => c.id.toString() === item.colorId) : null;
                                     return (
-                                        <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                        <div key={index} className="flex items-center justify-between p-3 bg-theme-surface rounded-lg">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <p className="font-medium text-theme-primary">{item.productName}</p>
@@ -624,7 +624,7 @@ export default function SalesInvoicesTab() {
                     </div>
 
                     {invoiceItems.length > 0 && (
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                        <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
                                 <span>LKR {totals.subtotal.toFixed(2)}</span>
@@ -637,7 +637,7 @@ export default function SalesInvoicesTab() {
                                 <span>Tax (10%):</span>
                                 <span>LKR {totals.tax.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
+                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
                                 <span>LKR {totals.total.toFixed(2)}</span>
                             </div>
@@ -674,11 +674,11 @@ export default function SalesInvoicesTab() {
                             </div>
                         </div>
 
-                        <div className="border-t border-white/10 pt-6">
+                        <div className="border-t border-theme-border pt-6">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Items</h3>
                             <div className="space-y-2">
                                 {viewingInvoice.items.map((item, index) => (
-                                    <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
+                                    <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.Product?.name || item.productName || 'Unknown'}{item.colorName ? ` - ${item.colorName}` : ''}</p>
                                             <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
@@ -694,7 +694,7 @@ export default function SalesInvoicesTab() {
                             </div>
                         </div>
 
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                        <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
                                 <span>LKR {viewingInvoice.subtotal.toFixed(2)}</span>
@@ -707,22 +707,22 @@ export default function SalesInvoicesTab() {
                                 <span>Tax:</span>
                                 <span>LKR {viewingInvoice.tax.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
+                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
                                 <span>LKR {viewingInvoice.total.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-green-400 border-t border-white/10 pt-2">
+                            <div className="flex justify-between text-green-500 border-t border-theme-border pt-2">
                                 <span>Amount Paid:</span>
                                 <span>LKR {viewingInvoice.amountPaid.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-red-400">
+                            <div className="flex justify-between text-red-500">
                                 <span>Amount Due:</span>
                                 <span>LKR {viewingInvoice.amountDue.toFixed(2)}</span>
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
-                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                        <div className="flex flex-col gap-4 pt-4 border-t border-theme-border">
+                            <div className="flex justify-between items-center bg-theme-surface p-3 rounded-lg">
                                 <span className="text-sm text-theme-secondary">Status</span>
                                 <span className={`badge ${viewingInvoice.status === 'Paid' ? 'badge-success' :
                                     viewingInvoice.status === 'Partial' ? 'badge-info' :

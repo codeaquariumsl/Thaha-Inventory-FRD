@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '../../lib/api';
 import { User, Lock, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import Image from 'next/image';
 
 export default function LoginPage() {
@@ -11,6 +12,9 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
+    const { theme } = useTheme();
+
+    const logoClass = theme === 'dark' ? 'invert contrast-125' : '';
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
@@ -49,7 +53,7 @@ export default function LoginPage() {
                                 alt="Company Logo"
                                 width={80}
                                 height={80}
-                                className="rounded-xl shadow-lg object-contain"
+                                className={`rounded-xl shadow-lg object-contain transition-all duration-300 ${logoClass}`}
                                 priority
                             />
                         </div>
@@ -58,7 +62,7 @@ export default function LoginPage() {
                         {/* <span className="gradient-text">THAHA</span> */}
                         <span className="text-theme-primary ml-2 uppercase tracking-[0.2em] text-xs block mt-1 font-bold opacity-70">Inventory Management</span>
                     </h1>
-                    <p className="text-white/50 text-sm font-medium">Welcome back! Please enter your details.</p>
+                    <p className="text-theme-secondary text-sm font-medium">Welcome back! Please enter your details.</p>
                 </div>
 
                 {error && (
@@ -71,15 +75,15 @@ export default function LoginPage() {
                 <form className="space-y-6" onSubmit={handleSubmit}>
                     <div className="space-y-5">
                         <div className="space-y-1.5 text-left">
-                            <label className="text-[11px] font-bold text-white/40 ml-1 uppercase tracking-[0.2em]">Username</label>
+                            <label className="text-[11px] font-bold text-theme-secondary ml-1 uppercase tracking-[0.2em]">Username</label>
                             <div className="relative group">
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-primary-500 transition-colors duration-300 pointer-events-none z-10">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-theme-secondary group-focus-within:text-primary-500 transition-colors duration-300 pointer-events-none z-10">
                                     <User size={18} strokeWidth={2.5} />
                                 </div>
                                 <input
                                     type="text"
                                     required
-                                    className="input-field !pl-12 h-12 bg-white/5 hover:bg-white/[0.07] focus:bg-white/[0.08] border-white/10 focus:border-primary-500 transition-all duration-300 placeholder:text-white/40"
+                                    className="input-field !pl-12 h-12 transition-all duration-300"
                                     placeholder="Enter your username"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
@@ -88,15 +92,15 @@ export default function LoginPage() {
                         </div>
 
                         <div className="space-y-1.5 text-left">
-                            <label className="text-[11px] font-bold text-white/40 ml-1 uppercase tracking-[0.2em]">Password</label>
+                            <label className="text-[11px] font-bold text-theme-secondary ml-1 uppercase tracking-[0.2em]">Password</label>
                             <div className="relative group">
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-primary-500 transition-colors duration-300 pointer-events-none z-10">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-theme-secondary group-focus-within:text-primary-500 transition-colors duration-300 pointer-events-none z-10">
                                     <Lock size={18} strokeWidth={2.5} />
                                 </div>
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     required
-                                    className="input-field !pl-12 h-12 bg-white/5 hover:bg-white/[0.07] focus:bg-white/[0.08] border-white/10 focus:border-primary-500 transition-all duration-300 placeholder:text-white/40"
+                                    className="input-field !pl-12 h-12 transition-all duration-300"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -104,7 +108,7 @@ export default function LoginPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-primary-400 transition-colors duration-300 z-10"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-theme-secondary hover:text-primary-500 transition-colors duration-300 z-10"
                                 >
                                     {showPassword ? <EyeOff size={18} strokeWidth={2.5} /> : <Eye size={18} strokeWidth={2.5} />}
                                 </button>
@@ -114,10 +118,10 @@ export default function LoginPage() {
 
                     <div className="flex items-center justify-between px-1">
                         <div className="flex items-center gap-2 cursor-pointer group">
-                            <input type="checkbox" id="remember" className="rounded border-white/10 bg-white/5 text-primary-500 focus:ring-primary-500/20 w-4 h-4" />
-                            <label htmlFor="remember" className="text-xs text-white/50 group-hover:text-white/80 transition-colors cursor-pointer">Remember me</label>
+                            <input type="checkbox" id="remember" className="rounded border-theme-border bg-theme-surface text-primary-500 focus:ring-primary-500/20 w-4 h-4" />
+                            <label htmlFor="remember" className="text-xs text-theme-secondary group-hover:text-theme-primary transition-colors cursor-pointer">Remember me</label>
                         </div>
-                        <button type="button" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors">Forgot password?</button>
+                        <button type="button" className="text-xs font-semibold text-primary-500 hover:text-primary-600 transition-colors">Forgot password?</button>
                     </div>
 
                     <button
@@ -138,19 +142,19 @@ export default function LoginPage() {
                 </form>
 
                 <div className="pt-2 text-center">
-                    <p className="text-xs text-white/40">
-                        Don&apos;t have an account? <button type="button" className="font-bold text-primary-400/80 hover:text-primary-400 hover:underline">Contact Administrator</button>
+                    <p className="text-xs text-theme-secondary">
+                        Don&apos;t have an account? <button type="button" className="font-bold text-primary-500 hover:text-primary-600 hover:underline">Contact Administrator</button>
                     </p>
                 </div>
             </div>
 
             {/* Subtle Footer */}
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center space-y-1">
-                <div className="text-[10px] uppercase tracking-[0.3em] font-semibold text-white/30">
+                <div className="text-[10px] uppercase tracking-[0.3em] font-semibold text-theme-secondary opacity-60">
                     Thaha Inventory Management &copy; 2026
                 </div>
-                <div className="text-[9px] uppercase tracking-[0.1em] font-medium text-white/20">
-                    Product of <span className="text-primary-400/40">Code Aqua Technologies</span>
+                <div className="text-[9px] uppercase tracking-[0.1em] font-medium text-theme-secondary opacity-40">
+                    Product of <span className="text-primary-500/60">Code Aqua Technologies</span>
                 </div>
             </div>
         </div>

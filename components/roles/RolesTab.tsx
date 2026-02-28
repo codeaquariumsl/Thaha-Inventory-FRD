@@ -88,7 +88,7 @@ export default function RolesTab() {
 
             <div className="table-container mb-8">
                 {/* Filters */}
-                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+                <div className="p-4 border-b border-theme-border flex items-center gap-4">
                     <div className="search-wrapper flex-1 max-w-sm">
                         <Search className="search-icon" />
                         <input
@@ -103,13 +103,13 @@ export default function RolesTab() {
 
                 <table className="data-table">
                     <thead>
-                        <tr className="border-b border-white/10 bg-white/5">
+                        <tr className="border-b border-theme-border bg-theme-surface">
                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Role Name</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">ID</th>
                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-theme-border">
                         {isLoading ? (
                             <tr>
                                 <td colSpan={3} className="px-6 py-4 text-center text-theme-secondary">Loading...</td>
@@ -120,7 +120,7 @@ export default function RolesTab() {
                             </tr>
                         ) : (
                             filteredRoles.map((role) => (
-                                <tr key={role.id} className="hover:bg-white/5 transition-colors">
+                                <tr key={role.id} className="hover:bg-theme-hover transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-theme-primary font-bold mr-3">
@@ -130,7 +130,7 @@ export default function RolesTab() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-secondary">
-                                        <span className="font-mono text-xs bg-white/5 px-2 py-1 rounded">{role.id}</span>
+                                        <span className="font-mono text-xs bg-theme-surface px-2 py-1 rounded border border-theme-border">{role.id}</span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end gap-2">
@@ -162,7 +162,7 @@ export default function RolesTab() {
                     <div className="modal-content relative max-w-md">
                         <button
                             onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+                            className="absolute top-4 right-4 text-theme-secondary hover:text-theme-primary transition-colors"
                         >
                             <X className="w-6 h-6" />
                         </button>
@@ -187,11 +187,11 @@ export default function RolesTab() {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-white/10">
+                            <div className="flex justify-end space-x-3 pt-4 border-t border-theme-border">
                                 <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}
-                                    className="px-6 py-2 border border-white/10 rounded-lg text-theme-secondary hover:bg-white/5 hover:text-white transition-colors"
+                                    className="px-6 py-2 border border-theme-border rounded-lg text-theme-secondary hover:bg-theme-hover hover:text-theme-primary transition-colors"
                                 >
                                     Cancel
                                 </button>

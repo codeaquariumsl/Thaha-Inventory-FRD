@@ -32,9 +32,9 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
                     <h2 className="text-2xl font-bold gradient-text">{title}</h2>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                        className="p-2 hover:bg-theme-hover rounded-lg transition-colors group"
                     >
-                        <X className="w-6 h-6 text-gray-400" />
+                        <X className="w-6 h-6 text-theme-secondary group-hover:text-theme-primary" />
                     </button>
                 </div>
                 {children}

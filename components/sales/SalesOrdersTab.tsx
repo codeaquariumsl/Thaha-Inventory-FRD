@@ -409,22 +409,22 @@ export default function SalesOrdersTab() {
                                 <td>{order.createdAt.toLocaleDateString()}</td>
                                 <td>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setViewingOrder(order); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
-                                            <Eye className="w-4 h-4 text-primary-400" />
+                                        <button onClick={() => { setViewingOrder(order); setIsViewModalOpen(true); }} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="View">
+                                            <Eye className="w-4 h-4 text-primary-500" />
                                         </button>
                                         {order.status === 'Draft' && (
-                                            <button onClick={() => handleOpenModal(order)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Edit">
-                                                <Edit className="w-4 h-4 text-blue-400" />
+                                            <button onClick={() => handleOpenModal(order)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Edit">
+                                                <Edit className="w-4 h-4 text-blue-500" />
                                             </button>
                                         )}
                                         {/* {order.status === 'Draft' && (
-                                            <button onClick={() => handleConfirmOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Confirm">
-                                                <CheckCircle className="w-4 h-4 text-green-400" />
+                                            <button onClick={() => handleConfirmOrder(order.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Confirm">
+                                                <CheckCircle className="w-4 h-4 text-green-500" />
                                             </button>
                                         )} */}
                                         {order.status === 'Draft' && (
-                                            <button onClick={() => handleDeleteOrder(order.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
-                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                            <button onClick={() => handleDeleteOrder(order.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Delete">
+                                                <Trash2 className="w-4 h-4 text-red-500" />
                                             </button>
                                         )}
                                     </div>
@@ -467,7 +467,7 @@ export default function SalesOrdersTab() {
                         )}
                     </div>
 
-                    <div className="border-t border-white/10 pt-6">
+                    <div className="border-t border-theme-border pt-6">
                         <h3 className="text-lg font-semibold text-theme-primary mb-4">Add Items</h3>
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                             <div className="md:col-span-2">
@@ -519,7 +519,7 @@ export default function SalesOrdersTab() {
                             <div className="overflow-x-auto mb-4">
                                 <table className="w-full border-collapse">
                                     <thead>
-                                        <tr className="border-b-2 border-white/20">
+                                        <tr className="border-b-2 border-theme-border">
                                             <th className="text-left text-sm font-semibold text-theme-secondary pb-3 pr-4">Item Name</th>
                                             <th className="text-center text-sm font-semibold text-theme-secondary pb-3 px-2">UOM</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Price</th>
@@ -537,7 +537,7 @@ export default function SalesOrdersTab() {
                                             const lineValue = item.quantity * discountedPrice;
 
                                             return (
-                                                <tr key={item.productId} className="border-b border-white/10 hover:bg-white/5 transition-colors">
+                                                <tr key={item.productId} className="border-b border-theme-border hover:bg-theme-hover transition-colors">
                                                     <td className="py-3 pr-4 text-theme-primary font-medium">{item.productName}</td>
                                                     <td className="py-3 px-2 text-center text-theme-secondary text-sm">{item.uom || 'pcs'}</td>
                                                     <td className="py-3 px-2 text-right text-theme-secondary">LKR {item.price.toFixed(2)}</td>
@@ -606,7 +606,7 @@ export default function SalesOrdersTab() {
                     </div>
 
                     {orderItems.length > 0 && (
-                        <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                        <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
                                 <span>LKR {totals.subtotal.toFixed(2)}</span>
@@ -619,7 +619,7 @@ export default function SalesOrdersTab() {
                                 <span>Tax (10%):</span>
                                 <span>LKR {totals.tax.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
+                            <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
                                 <span>LKR {totals.total.toFixed(2)}</span>
                             </div>
@@ -661,11 +661,11 @@ export default function SalesOrdersTab() {
                             </div>
                         </div>
 
-                        <div className="border-t border-white/10 pt-6">
+                        <div className="border-t border-theme-border pt-6">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Items</h3>
                             <div className="space-y-2">
                                 {viewingOrder.items.map((item, index) => (
-                                    <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
+                                    <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
                                             <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
@@ -707,7 +707,7 @@ export default function SalesOrdersTab() {
                             </div>
                         </div>
 
-                        <div className="flex gap-4 pt-4 border-t border-white/10">
+                        <div className="flex gap-4 pt-4 border-t border-theme-border">
                             {viewingOrder.status === 'Draft' && (
                                 <button
                                     onClick={() => handleApproveOrder(viewingOrder.id)}

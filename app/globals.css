@@ -91,7 +91,7 @@ body {
   }
 
   .input-field {
-    @apply w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/50 transition-all duration-300;
+    @apply w-full bg-theme-surface border border-theme-border rounded-lg px-4 py-3 text-theme-primary placeholder-theme-secondary focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/50 transition-all duration-300;
   }
 
   .search-wrapper {
@@ -113,7 +113,7 @@ body {
 
   /* Fix for select options in dark mode */
   select.input-field option {
-    @apply bg-slate-900 text-white;
+    @apply bg-theme-surface text-theme-primary;
   }
 
   .stat-card {

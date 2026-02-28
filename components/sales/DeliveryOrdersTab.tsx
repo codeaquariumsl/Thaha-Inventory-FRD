@@ -363,12 +363,12 @@ export default function DeliveryOrdersTab() {
                     <p className="text-2xl font-bold text-yellow-400">{deliveries.filter(d => d.status.toLowerCase() === 'pending').length}</p>
                 </div>
                 <div className="stat-card">
-                    <p className="text-sm text-gray-400 mb-1">In Transit</p>
-                    <p className="text-2xl font-bold text-blue-400">{deliveries.filter(d => d.status.toLowerCase() === 'in transit' || d.status.toLowerCase() === 'in_transit').length}</p>
+                    <p className="text-sm text-theme-secondary mb-1">In Transit</p>
+                    <p className="text-2xl font-bold text-blue-500">{deliveries.filter(d => d.status.toLowerCase() === 'in transit' || d.status.toLowerCase() === 'in_transit').length}</p>
                 </div>
                 <div className="stat-card">
-                    <p className="text-sm text-gray-400 mb-1">Delivered</p>
-                    <p className="text-2xl font-bold text-green-400">{deliveries.filter(d => d.status.toLowerCase() === 'delivered').length}</p>
+                    <p className="text-sm text-theme-secondary mb-1">Delivered</p>
+                    <p className="text-2xl font-bold text-green-500">{deliveries.filter(d => d.status.toLowerCase() === 'delivered').length}</p>
                 </div>
             </div>
 
@@ -437,8 +437,8 @@ export default function DeliveryOrdersTab() {
                                 </td>
                                 <td>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setViewingDelivery(delivery); setIsViewModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="View">
-                                            <Eye className="w-4 h-4 text-primary-400" />
+                                        <button onClick={() => { setViewingDelivery(delivery); setIsViewModalOpen(true); }} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="View">
+                                            <Eye className="w-4 h-4 text-primary-500" />
                                         </button>
                                         {/* {delivery.status === 'Pending' && (
                                             <button onClick={() => handleApprove(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Approve">
@@ -458,13 +458,13 @@ export default function DeliveryOrdersTab() {
                                             </button>
                                         )} */}
                                         {delivery.status === 'Pending' && (
-                                            <button onClick={() => handleDelete(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Delete">
-                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                            <button onClick={() => handleDelete(delivery.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Delete">
+                                                <Trash2 className="w-4 h-4 text-red-500" />
                                             </button>
                                         )}
                                         {delivery.status !== 'Pending' && (
-                                            <button onClick={() => handlePrintDeliveryOrder(delivery.id)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Print">
-                                                <Printer className="w-4 h-4 text-blue-400" />
+                                            <button onClick={() => handlePrintDeliveryOrder(delivery.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Print">
+                                                <Printer className="w-4 h-4 text-primary-500" />
                                             </button>
                                         )}
                                     </div>
@@ -562,7 +562,7 @@ export default function DeliveryOrdersTab() {
 
                     {/* Add Items (only if not from sales order) */}
                     {!formData.salesOrderId && (
-                        <div className="border-t border-white/10 pt-6">
+                        <div className="border-t border-theme-border pt-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-theme-primary">Add Items</h3>
                                 {formData.customerId && (
@@ -624,7 +624,7 @@ export default function DeliveryOrdersTab() {
 
                     {/* Items Table */}
                     {deliveryItems.length > 0 && (
-                        <div className="border-t border-white/10 pt-6 mb-4">
+                        <div className="border-t border-theme-border pt-6 mb-4">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Delivery Items</h3>
                             <div className="table-container">
                                 <table className="data-table min-w-[1000px]">
@@ -653,7 +653,7 @@ export default function DeliveryOrdersTab() {
                                                             min="1"
                                                             value={item.quantity}
                                                             onChange={(e) => handleUpdateItemQuantity(item.productId, parseInt(e.target.value) || 1)}
-                                                            className="w-20 bg-white/5 border border-white/10 rounded px-2 py-1 text-theme-primary text-center focus:outline-none focus:border-primary-500"
+                                                            className="w-20 bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-primary text-center focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
                                                         <span className="text-theme-primary">{item.quantity}</span>
@@ -668,7 +668,7 @@ export default function DeliveryOrdersTab() {
                                                             step="0.01"
                                                             value={item.discount}
                                                             onChange={(e) => handleUpdateItemDiscount(item.productId, parseFloat(e.target.value) || 0)}
-                                                            className="w-24 bg-white/5 border border-white/10 rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
+                                                            className="w-24 bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
                                                         <span className="text-theme-secondary">LKR {item.discount.toFixed(2)}</span>
@@ -682,7 +682,7 @@ export default function DeliveryOrdersTab() {
                                                             step="0.01"
                                                             value={item.tax}
                                                             onChange={(e) => handleUpdateItemTax(item.productId, parseFloat(e.target.value) || 0)}
-                                                            className="w-24 bg-white/5 border border-white/10 rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
+                                                            className="w-24 bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
                                                         <span className="text-theme-secondary">LKR {item.tax.toFixed(2)}</span>
@@ -717,7 +717,7 @@ export default function DeliveryOrdersTab() {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveItem(item.productId)}
-                                                            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                                            className="p-2 hover:bg-theme-hover rounded-lg transition-colors"
                                                             title="Remove Item"
                                                         >
                                                             <Trash2 className="w-4 h-4 text-red-400" />
@@ -728,7 +728,7 @@ export default function DeliveryOrdersTab() {
                                         ))}
                                     </tbody>
                                     <tfoot>
-                                        <tr className="border-t border-white/10">
+                                        <tr className="border-t border-theme-border">
                                             <td colSpan={6} className="text-right font-semibold py-2 text-theme-secondary">
                                                 Subtotal:
                                             </td>
@@ -755,7 +755,7 @@ export default function DeliveryOrdersTab() {
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
-                                        <tr className="border-t-2 border-white/20">
+                                        <tr className="border-t-2 border-theme-border">
                                             <td colSpan={6} className="text-right font-bold text-lg py-3 text-theme-primary">
                                                 Grand Total:
                                             </td>
@@ -851,9 +851,9 @@ export default function DeliveryOrdersTab() {
 
                         {/* Sales Order Info Section */}
                         {/* {(viewingDelivery as any).SalesOrder && (
-                            <div className="border-t border-white/10 pt-6">
+                            <div className="border-t border-theme-border pt-6">
                                 <h3 className="text-lg font-semibold text-theme-primary mb-4">Sales Order Information</h3>
-                                <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-lg">
+                                <div className="grid grid-cols-2 gap-4 bg-theme-surface p-4 rounded-lg">
                                     <div>
                                         <p className="text-sm text-theme-secondary">Order Date</p>
                                         <p className="font-semibold text-theme-primary">
@@ -876,11 +876,11 @@ export default function DeliveryOrdersTab() {
                             </div>
                         )} */}
 
-                        <div className="border-t border-white/10 pt-6">
+                        <div className="border-t border-theme-border pt-6">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Items</h3>
                             <div className="space-y-2">
                                 {viewingDelivery.items.map((item, index) => (
-                                    <div key={index} className="flex justify-between p-3 bg-white/5 rounded-lg">
+                                    <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
                                             <p className="text-sm text-theme-secondary">Quantity: {item.quantity}</p>
@@ -902,7 +902,7 @@ export default function DeliveryOrdersTab() {
                             </div>
                         )}
 
-                        <div className="flex gap-4 pt-4 border-t border-white/10">
+                        <div className="flex gap-4 pt-4 border-t border-theme-border">
                             {viewingDelivery.status === 'Pending' && (
                                 <button
                                     onClick={() => {

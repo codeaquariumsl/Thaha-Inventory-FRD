@@ -102,7 +102,7 @@ export default function UsersTab() {
 
             <div className="table-container mb-8">
                 {/* Filters */}
-                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+                <div className="p-4 border-b border-theme-border flex items-center gap-4">
                     <div className="search-wrapper flex-1 max-w-sm">
                         <Search className="search-icon" />
                         <input
@@ -117,16 +117,16 @@ export default function UsersTab() {
 
                 <table className="data-table">
                     <thead>
-                        <tr className="border-b border-white/10 bg-white/5">
+                        <tr className="border-b border-theme-border bg-theme-surface">
                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">User</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Role</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Status</th>
                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-theme-border">
                         {filteredUsers.map((user) => (
-                            <tr key={user.id} className="hover:bg-white/5 transition-colors">
+                            <tr key={user.id} className="hover:bg-theme-hover transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-theme-primary font-bold mr-3">
@@ -139,7 +139,7 @@ export default function UsersTab() {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-theme-primary bg-white/5 px-3 py-1 rounded-full inline-block border border-white/10">
+                                    <div className="text-sm text-theme-primary bg-theme-surface px-3 py-1 rounded-full inline-block border border-theme-border">
                                         {user.Role ? user.Role.name : '-'}
                                     </div>
                                 </td>
@@ -181,7 +181,7 @@ export default function UsersTab() {
                     <div className="modal-content relative max-w-lg">
                         <button
                             onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+                            className="absolute top-4 right-4 text-theme-secondary hover:text-theme-primary transition-colors"
                         >
                             <X className="w-6 h-6" />
                         </button>
@@ -240,7 +240,7 @@ export default function UsersTab() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10">
+                                <div className="flex items-center gap-3 p-3 bg-theme-surface rounded-lg border border-theme-border">
                                     <input
                                         type="checkbox"
                                         id="isActive"
@@ -254,11 +254,11 @@ export default function UsersTab() {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-white/10">
+                            <div className="flex justify-end space-x-3 pt-4 border-t border-theme-border">
                                 <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}
-                                    className="px-6 py-2 border border-white/10 rounded-lg text-theme-secondary hover:bg-white/5 hover:text-white transition-colors"
+                                    className="px-6 py-2 border border-theme-border rounded-lg text-theme-secondary hover:bg-theme-hover hover:text-theme-primary transition-colors"
                                 >
                                     Cancel
                                 </button>
