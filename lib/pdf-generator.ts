@@ -260,7 +260,7 @@ export const generateDeliveryOrderPDF = async (delivery: DeliveryOrder) => {
     doc.setFont('helvetica', 'normal');
     doc.text(delivery.customerName, 40, 30);
 
-    const customer: any = delivery.deliveryAddress || delivery.SalesOrder?.Customer;
+    const customer: any = delivery.deliveryAddress;
     if (customer) {
         let address = "";
         let phone = "";
