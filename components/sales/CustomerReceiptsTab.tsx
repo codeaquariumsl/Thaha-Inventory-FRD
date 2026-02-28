@@ -3,6 +3,7 @@
 import Modal from '@/components/Modal';
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Eye } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 // import { customerReceipts as initialReceipts, customers, salesInvoices } from '@/data/salesData';
 import { CustomerReceipt, Customer, SalesInvoice } from '@/types';
 import * as api from '@/lib/api';
@@ -206,12 +207,17 @@ export default function CustomerReceiptsTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
-                            <select required value={formData.customerId} onChange={(e) => setFormData({ ...formData, customerId: e.target.value, invoiceId: '' })} className="input-field">
-                                <option value="">Select Customer</option>
-                                {customers.map(customer => (
-                                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                required
+                                value={formData.customerId}
+                                onChange={(val) => setFormData({ ...formData, customerId: val, invoiceId: '' })}
+                                placeholder="Select Customer"
+                                options={customers.map(c => ({
+                                    value: c.id,
+                                    label: c.name,
+                                    sublabel: (c as any).email
+                                }))}
+                            />
                         </div>
 
                         <div>

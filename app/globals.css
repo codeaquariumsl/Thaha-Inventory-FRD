@@ -138,6 +138,17 @@ body {
   }
 }
 
+/* SearchableSelect custom properties */
+:root {
+  --ss-bg: #1a1f35;
+  --ss-text: #ffffff;
+}
+
+[data-theme="light"] {
+  --ss-bg: #ffffff;
+  --ss-text: #0f172a;
+}
+
 /* Dark Mode Select & Options — must use direct values, not CSS vars, for native browser dropdowns */
 select.input-field {
   background-color: #1a1f35;

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
 import { Plus, Search, Eye, Send, DollarSign, CheckSquare, Printer } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 // import { salesInvoices as initialInvoices, customers, deliveryOrders } from '@/data/salesData';
 // import { products } from '@/data/mockData';
 import { SalesInvoice, EnhancedSaleItem, Customer, DeliveryOrder, Product, Color } from '@/types';
@@ -461,20 +462,20 @@ export default function SalesInvoicesTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
-                            <select
+                            <SearchableSelect
                                 required
                                 value={formData.customerId}
-                                onChange={(e) => {
-                                    setFormData({ ...formData, customerId: e.target.value, deliveryOrderId: '' });
+                                onChange={(val) => {
+                                    setFormData({ ...formData, customerId: val, deliveryOrderId: '' });
                                     setInvoiceItems([]);
                                 }}
-                                className="input-field"
-                            >
-                                <option value="">Select Customer</option>
-                                {customers.filter(c => c.status === 'active').map(customer => (
-                                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                ))}
-                            </select>
+                                placeholder="Select Customer"
+                                options={customers.filter(c => c.status === 'active').map(c => ({
+                                    value: c.id,
+                                    label: c.name,
+                                    sublabel: c.email
+                                }))}
+                            />
                         </div>
 
                         <div>
@@ -530,12 +531,16 @@ export default function SalesInvoicesTab() {
                         {!formData.deliveryOrderId && (
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
                                 <div className="md:col-span-2">
-                                    <select value={selectedProduct} onChange={(e) => { setSelectedProduct(e.target.value); setSelectedColor(''); }} className="input-field">
-                                        <option value="">Select Product</option>
-                                        {products.map(product => (
-                                            <option key={product.id} value={product.id}>{product.name} - LKR {product.price}</option>
-                                        ))}
-                                    </select>
+                                    <SearchableSelect
+                                        value={selectedProduct}
+                                        onChange={(val) => { setSelectedProduct(val); setSelectedColor(''); }}
+                                        placeholder="Select Product"
+                                        options={products.map(p => ({
+                                            value: p.id,
+                                            label: p.name,
+                                            sublabel: `LKR ${p.price}`
+                                        }))}
+                                    />
                                 </div>
                                 <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="input-field" placeholder="Qty" />
                                 <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field" placeholder="Discount" />

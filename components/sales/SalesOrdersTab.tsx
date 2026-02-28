@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import Modal from '@/components/Modal';
 import { Plus, Search, Eye, Edit, Trash2, CheckCircle } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 import { SalesOrder, Customer, Product, EnhancedSaleItem, Color } from '@/types';
 import * as api from '@/lib/api';
 // import { products as initialProducts } from '@/data/mockData'; // We will fetch products too
@@ -441,12 +442,17 @@ export default function SalesOrdersTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
-                            <select required value={formData.customerId} onChange={(e) => setFormData({ ...formData, customerId: e.target.value })} className="input-field">
-                                <option value="">Select Customer</option>
-                                {customers.filter(c => c.status === 'active').map(customer => (
-                                    <option key={customer.id} value={customer.id}>{customer.name} - {customer.email}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                required
+                                value={formData.customerId}
+                                onChange={(val) => setFormData({ ...formData, customerId: val })}
+                                placeholder="Select Customer"
+                                options={customers.filter(c => c.status === 'active').map(c => ({
+                                    value: c.id,
+                                    label: c.name,
+                                    sublabel: c.email
+                                }))}
+                            />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Delivery Date</label>
@@ -472,12 +478,16 @@ export default function SalesOrdersTab() {
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Product</label>
-                                <select value={selectedProduct} onChange={(e) => { setSelectedProduct(e.target.value); setSelectedColor(''); }} className="input-field">
-                                    <option value="">Select Product</option>
-                                    {products.map(product => (
-                                        <option key={product.id} value={product.id}>{product.name}</option>
-                                    ))}
-                                </select>
+                                <SearchableSelect
+                                    value={selectedProduct}
+                                    onChange={(val) => { setSelectedProduct(val); setSelectedColor(''); }}
+                                    placeholder="Select Product"
+                                    options={products.map(p => ({
+                                        value: p.id,
+                                        label: p.name,
+                                        sublabel: `LKR ${typeof p.price === 'number' ? p.price.toFixed(2) : p.price}`
+                                    }))}
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Price</label>

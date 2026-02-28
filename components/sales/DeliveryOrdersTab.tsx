@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
 import { Plus, Search, Eye, Truck, CheckCircle, Trash2, FileText, CheckSquare, Printer } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 import { DeliveryOrder, EnhancedSaleItem, SalesInvoice, Customer, SalesOrder, Product, Color } from '@/types';
 import * as api from '@/lib/api';
 import { generateDeliveryOrderPDF } from '@/lib/pdf-generator';
@@ -481,17 +482,17 @@ export default function DeliveryOrdersTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
-                            <select
+                            <SearchableSelect
                                 required
                                 value={formData.customerId}
-                                onChange={(e) => handleCustomerChange(e.target.value)}
-                                className="input-field"
-                            >
-                                <option value="">Select Customer</option>
-                                {customers.filter(c => c.status === 'active').map(customer => (
-                                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                ))}
-                            </select>
+                                onChange={(val) => handleCustomerChange(val)}
+                                placeholder="Select Customer"
+                                options={customers.filter(c => c.status === 'active').map(c => ({
+                                    value: c.id,
+                                    label: c.name,
+                                    sublabel: c.email
+                                }))}
+                            />
                         </div>
 
                         <div>
@@ -573,27 +574,24 @@ export default function DeliveryOrdersTab() {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                                 <div className="md:col-span-2">
-                                    <select
+                                    <SearchableSelect
                                         value={selectedProduct}
-                                        onChange={(e) => { setSelectedProduct(e.target.value); setSelectedColor(''); }}
-                                        className="input-field"
+                                        onChange={(val) => { setSelectedProduct(val); setSelectedColor(''); }}
+                                        placeholder="Select Product"
                                         disabled={!formData.customerId}
-                                    >
-                                        <option value="">Select Product</option>
-                                        {products.map(product => {
+                                        options={products.map(product => {
                                             const customer = customers.find(c => c.id === formData.customerId);
                                             const customerPrice = customer?.customerPrices?.[product.id];
                                             const hasCustomPrice = customerPrice !== undefined;
-
-                                            return (
-                                                <option key={product.id} value={product.id}>
-                                                    {product.name} - {hasCustomPrice
-                                                        ? `LKR ${customerPrice.toFixed(2)} (Special Price, Reg: LKR ${product.price})`
-                                                        : `LKR ${product.price}`} | Stock: {product.stock} {product.uom}
-                                                </option>
-                                            );
+                                            return {
+                                                value: product.id,
+                                                label: product.name,
+                                                sublabel: hasCustomPrice
+                                                    ? `LKR ${customerPrice.toFixed(2)} (Special) | Stock: ${product.stock} ${product.uom}`
+                                                    : `LKR ${product.price} | Stock: ${product.stock} ${product.uom}`
+                                            };
                                         })}
-                                    </select>
+                                    />
                                 </div>
                                 <div>
                                     <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="input-field">

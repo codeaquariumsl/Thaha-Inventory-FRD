@@ -3,6 +3,7 @@
 import Modal from '@/components/Modal';
 import { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Plus, Search, Eye, Trash2, CheckCircle } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 import { Purchase, PurchaseItem, Product } from '@/types';
 import * as api from '@/lib/api';
 
@@ -360,19 +361,17 @@ export default function PurchaseOrdersTab() {
                             <label className="block text-sm font-medium text-theme-secondary mb-2">
                                 Supplier *
                             </label>
-                            <select
+                            <SearchableSelect
                                 required
                                 value={formData.supplierId}
-                                onChange={(e) => handleSupplierChange(e.target.value)}
-                                className="input-field"
-                            >
-                                <option value="">Select Supplier</option>
-                                {suppliers.map(supplier => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(val) => handleSupplierChange(val)}
+                                placeholder="Select Supplier"
+                                options={suppliers.map(s => ({
+                                    value: s.id,
+                                    label: s.name,
+                                    sublabel: s.email
+                                }))}
+                            />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">
@@ -393,18 +392,16 @@ export default function PurchaseOrdersTab() {
                         <h3 className="text-lg font-semibold text-theme-primary mb-4">Add Items</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div className="md:col-span-2">
-                                <select
+                                <SearchableSelect
                                     value={selectedProduct}
-                                    onChange={(e) => setSelectedProduct(e.target.value)}
-                                    className="input-field"
-                                >
-                                    <option value="">Select Product</option>
-                                    {products.map(product => (
-                                        <option key={product.id} value={product.id}>
-                                            {product.name} - Cost: LKR {product.cost.toFixed(2)}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setSelectedProduct(val)}
+                                    placeholder="Select Product"
+                                    options={products.map(p => ({
+                                        value: p.id,
+                                        label: p.name,
+                                        sublabel: `Cost: LKR ${p.cost.toFixed(2)}`
+                                    }))}
+                                />
                             </div>
                             <div className="flex gap-2">
                                 <input
