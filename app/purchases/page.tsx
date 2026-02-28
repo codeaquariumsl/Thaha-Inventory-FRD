@@ -23,7 +23,7 @@ export default function PurchasesPage() {
             <main className="flex-1 p-8 animate-fade-in">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-white mb-2">Purchases</h1>
+                    <h1 className="text-4xl font-bold text-theme-primary mb-2">Purchases</h1>
                     <p className="text-gray-400">Manage purchase orders and supplier relationships</p>
                 </div>
 
@@ -42,7 +42,7 @@ export default function PurchasesPage() {
                                         flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-300 font-medium
                                         ${isActive
                                             ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
-                                            : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                            : 'text-theme-primary hover:bg-white/5 hover:text-theme-secondary'
                                         }
                                     `}
                                 >

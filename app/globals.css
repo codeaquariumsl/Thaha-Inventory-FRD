@@ -113,7 +113,8 @@ body {
 
   /* Fix for select options in dark mode */
   select.input-field option {
-    @apply bg-theme-surface text-theme-primary;
+    background-color: #1a1f35;
+    color: #ffffff;
   }
 
   .stat-card {
@@ -137,13 +138,42 @@ body {
   }
 }
 
+/* Dark Mode Select & Options — must use direct values, not CSS vars, for native browser dropdowns */
+select.input-field {
+  background-color: #1a1f35;
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+select.input-field option {
+  background-color: #1a1f35;
+  color: #ffffff;
+}
+
+select.input-field optgroup {
+  background-color: #0a0e1a;
+  color: #9ca3af;
+}
+
 /* Light Mode Input Fields */
 [data-theme="light"] .input-field {
   @apply bg-white border-slate-300 text-slate-900 placeholder-slate-400;
 }
 
+[data-theme="light"] select.input-field {
+  background-color: #ffffff;
+  color: #0f172a;
+  color-scheme: light;
+}
+
 [data-theme="light"] select.input-field option {
-  @apply bg-white text-slate-900;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme="light"] select.input-field optgroup {
+  background-color: #f8fafc;
+  color: #475569;
 }
 
 [data-theme="light"] .input-field:focus {
