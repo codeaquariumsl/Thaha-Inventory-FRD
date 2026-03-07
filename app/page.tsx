@@ -39,7 +39,7 @@ export default function Home() {
                 api.getPurchaseOrders()
             ]);
 
-            setProducts(prodData.map((p: any) => ({
+            setProducts((prodData.data || []).map((p: any) => ({
                 ...p,
                 price: parseFloat(p.price) || 0,
                 cost: parseFloat(p.cost) || 0,
@@ -144,15 +144,15 @@ export default function Home() {
         <div className="flex min-h-screen">
             <Sidebar />
 
-            <main className="flex-1 p-8 animate-fade-in">
+            <main className="flex-1 p-4 animate-fade-in">
                 {/* Header */}
-                <div className="mb-8">
+                <div className="mb-4">
                     <h1 className="text-4xl font-bold text-theme-primary mb-2">Dashboard</h1>
                     <p className="text-theme-secondary">Welcome back! Here&apos;s what&apos;s happening with your inventory.</p>
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <StatCard
                         title="Total Revenue"
                         value={`LKR ${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
@@ -182,16 +182,16 @@ export default function Home() {
                 </div>
 
                 {/* Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                     {/* Recent Sales */}
-                    <div className="glass-card p-6 animate-slide-up">
+                    <div className="glass-card p-4 animate-slide-up">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-theme-primary">Recent Sales</h2>
                             <ShoppingCart className="w-5 h-5 text-primary-400" />
                         </div>
                         <div className="space-y-4">
                             {recentSales.map((sale) => (
-                                <div key={sale.id} className="flex items-center justify-between p-4 bg-theme-surface rounded-lg hover:bg-theme-hover transition-colors">
+                                <div key={sale.id} className="flex items-center justify-between p-2 bg-theme-surface rounded-lg hover:bg-theme-hover transition-colors">
                                     <div className="flex-1">
                                         <p className="font-semibold text-theme-primary">{sale.Customer?.name || sale.customerName || sale.id}</p>
                                         <p className="text-sm text-theme-secondary">{sale.orderNumber}</p>
@@ -210,7 +210,7 @@ export default function Home() {
                     </div>
 
                     {/* Top Selling Products */}
-                    <div className="glass-card p-6 animate-slide-up">
+                    <div className="glass-card p-4 animate-slide-up">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-theme-primary">Top Selling Products</h2>
                             <TrendingUp className="w-5 h-5 text-accent-400" />

@@ -3,9 +3,10 @@
 import Sidebar from '@/components/Sidebar';
 import Modal from '@/components/Modal';
 import { useState, useMemo, useEffect } from 'react';
-import { Package, Plus, Search, Edit, Trash2, AlertCircle, Layers, Box, Tags, LayoutGrid, List } from 'lucide-react';
+import { Package, Plus, Search, Edit, Trash2, AlertCircle, Layers, Box, Tags, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product, Category, Supplier, Color } from '@/types';
 import * as api from '@/lib/api';
+import ToggleSwitch from '@/components/ToggleSwitch';
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -29,8 +30,12 @@ export default function ProductsPage() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [activeTab, setActiveTab] = useState<'finished_good' | 'raw_material'>('finished_good');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
     const [isLoading, setIsLoading] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [limit, setLimit] = useState(10);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -49,20 +54,49 @@ export default function ProductsPage() {
     });
 
     useEffect(() => {
-        loadData();
+        loadInitialData();
     }, []);
 
-    const loadData = async () => {
+    useEffect(() => {
+        loadProducts();
+    }, [currentPage, searchTerm, selectedCategory, activeTab, limit]);
+
+    const loadInitialData = async () => {
         try {
-            setIsLoading(true);
-            const [productsData, categoriesData, suppliersData, colorsData] = await Promise.all([
-                api.getProducts(),
+            const [categoriesData, suppliersData, colorsData] = await Promise.all([
                 api.getCategories(),
                 api.getSuppliers(),
                 api.getColors()
             ]);
 
-            setProducts(productsData.map((p: any) => ({
+            setCategoriesList(categoriesData);
+            setColorsList(colorsData);
+            setSuppliers(suppliersData);
+        } catch (error) {
+            console.error("Failed to load initial data", error);
+        }
+    };
+
+    const loadProducts = async () => {
+        try {
+            setIsLoading(true);
+
+            // Find category ID if a specific category is selected
+            let categoryId = '';
+            if (selectedCategory !== 'all') {
+                const category = categoriesList.find(c => c.name === selectedCategory);
+                if (category) categoryId = category.id;
+            }
+
+            const response = await api.getProducts({
+                page: currentPage,
+                limit: limit,
+                search: searchTerm,
+                categoryId: categoryId,
+                type: activeTab
+            });
+
+            setProducts(response.data.map((p: any) => ({
                 ...p,
                 categoryId: p.categoryId ? p.categoryId.toString() : '',
                 category: p.Category ? p.Category.name : 'Uncategorized',
@@ -77,26 +111,33 @@ export default function ProductsPage() {
                 createdAt: new Date(p.createdAt),
                 updatedAt: new Date(p.updatedAt)
             })));
-            setCategoriesList(categoriesData);
-            setColorsList(colorsData);
-            setSuppliers(suppliersData);
+            setTotalPages(response.totalPages);
+            setTotalItems(response.total);
         } catch (error) {
-            console.error("Failed to load data", error);
+            console.error("Failed to load products", error);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Filter products
-    const filteredProducts = useMemo(() => {
-        return products.filter(product => {
-            const matchesType = product.type === activeTab;
-            const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-            return matchesType && matchesSearch && matchesCategory;
-        });
-    }, [products, searchTerm, selectedCategory, activeTab]);
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(e.target.value);
+        setCurrentPage(1); // Reset to first page on search
+    };
+
+    const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedCategory(e.target.value);
+        setCurrentPage(1); // Reset to first page on category change
+    };
+
+    const handleTabChange = (tab: 'finished_good' | 'raw_material') => {
+        setActiveTab(tab);
+        setSelectedCategory('all');
+        setCurrentPage(1); // Reset to first page on tab change
+    };
+
+    // Filter products - No longer needed as we use server-side filtering
+    const filteredProducts = products;
 
     // Use categoriesList for filters
     const filterCategories = useMemo(() => {
@@ -162,7 +203,8 @@ export default function ProductsPage() {
                     description: 'Custom category'
                 });
             }
-            loadData();
+            loadInitialData();
+            loadProducts();
             setNewCategoryName('');
             setEditingCategory(null);
         } catch (error: any) {
@@ -174,7 +216,8 @@ export default function ProductsPage() {
         if (confirm(`Are you sure you want to delete category "${name}"?`)) {
             try {
                 await api.deleteCategory(id);
-                loadData();
+                loadInitialData();
+                loadProducts();
             } catch (error: any) {
                 alert('Failed to delete category: ' + error.message);
             }
@@ -208,7 +251,8 @@ export default function ProductsPage() {
                     hexCode: newColorHex
                 });
             }
-            loadData();
+            loadInitialData();
+            loadProducts();
             setNewColorName('');
             setNewColorHex('#000000');
             setEditingColor(null);
@@ -221,7 +265,8 @@ export default function ProductsPage() {
         if (confirm(`Are you sure you want to delete color "${name}"?`)) {
             try {
                 await api.deleteColor(id);
-                loadData();
+                loadInitialData();
+                loadProducts();
             } catch (error: any) {
                 alert('Failed to delete color: ' + error.message);
             }
@@ -266,7 +311,7 @@ export default function ProductsPage() {
             } else {
                 await api.createProduct(payload);
             }
-            loadData();
+            loadProducts();
             handleCloseModal();
         } catch (error: any) {
             alert('Failed to save product: ' + error.message);
@@ -277,7 +322,7 @@ export default function ProductsPage() {
         if (confirm('Are you sure you want to delete this product?')) {
             try {
                 await api.deleteProduct(id);
-                loadData();
+                loadProducts();
             } catch (error: any) {
                 alert('Failed to delete product: ' + error.message);
             }
@@ -288,7 +333,7 @@ export default function ProductsPage() {
         <div className="flex min-h-screen">
             <Sidebar />
 
-            <main className="flex-1 p-8 animate-fade-in">
+            <main className="flex-1 p-4 animate-fade-in">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                     <div>
@@ -300,7 +345,7 @@ export default function ProductsPage() {
                 {/* Tabs */}
                 <div className="flex gap-4 mb-6 border-b border-theme-border">
                     <button
-                        onClick={() => { setActiveTab('finished_good'); setSelectedCategory('all'); }}
+                        onClick={() => handleTabChange('finished_good')}
                         className={`pb-4 px-4 flex items-center gap-2 transition-all relative ${activeTab === 'finished_good' ? 'text-primary-400' : 'text-theme-secondary hover:text-theme-primary'}`}
                     >
                         <Package className="w-5 h-5" />
@@ -310,7 +355,7 @@ export default function ProductsPage() {
                         )}
                     </button>
                     <button
-                        onClick={() => { setActiveTab('raw_material'); setSelectedCategory('all'); }}
+                        onClick={() => handleTabChange('raw_material')}
                         className={`pb-4 px-4 flex items-center gap-2 transition-all relative ${activeTab === 'raw_material' ? 'text-primary-400' : 'text-theme-secondary hover:text-theme-primary'}`}
                     >
                         <Layers className="w-5 h-5" />
@@ -323,7 +368,7 @@ export default function ProductsPage() {
 
                 {/* Main Content Area */}
                 <div>
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-4">
                             <div className="flex bg-theme-surface p-1 rounded-lg">
                                 <button
@@ -343,12 +388,38 @@ export default function ProductsPage() {
                             </div>
                             <div className="flex items-center gap-2 text-theme-secondary">
                                 <span className="bg-theme-surface px-3 py-1 rounded-full text-sm">
-                                    {filteredProducts.length} items
+                                    {totalItems} items
                                 </span>
                             </div>
                         </div>
 
                         <div className="flex gap-2">
+                            {/* Filters */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="search-wrapper">
+                                    <Search className="search-icon" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search..."
+                                        value={searchTerm}
+                                        onChange={handleSearchChange}
+                                        className="input-field search-input"
+                                        autoFocus
+                                    />
+                                </div>
+                                <select
+                                    value={selectedCategory}
+                                    onChange={handleCategoryChange}
+                                    className="input-field"
+                                >
+                                    {filterCategories.map(cat => (
+                                        <option key={cat} value={cat}>
+                                            {cat === 'all' ? 'All Categories' : cat}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <button
                                 onClick={() => setIsColorModalOpen(true)}
                                 className="btn-outline flex items-center gap-2"
@@ -373,33 +444,7 @@ export default function ProductsPage() {
                         </div>
                     </div>
 
-                    {/* Filters */}
-                    <div className="glass-card p-6 mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="search-wrapper">
-                                <Search className="search-icon" />
-                                <input
-                                    type="text"
-                                    placeholder="Search..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="input-field search-input"
-                                    autoFocus
-                                />
-                            </div>
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="input-field"
-                            >
-                                {filterCategories.map(cat => (
-                                    <option key={cat} value={cat}>
-                                        {cat === 'all' ? 'All Categories' : cat}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+
 
                     {/* Products View */}
                     {isLoading ? (
@@ -495,8 +540,10 @@ export default function ProductsPage() {
                                     <thead className="bg-theme-surface border-b border-theme-border">
                                         <tr>
                                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Type</th>
-                                            <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Name / SKU</th>
+                                            <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Name</th>
+                                            <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">SKU</th>
                                             <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Category</th>
+                                            <th className="px-6 py-4 text-left text-xs font-semibold text-theme-secondary uppercase tracking-wider">Colors</th>
                                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Price</th>
                                             <th className="px-6 py-4 text-center text-xs font-semibold text-theme-secondary uppercase tracking-wider">Has Lid</th>
                                             <th className="px-6 py-4 text-right text-xs font-semibold text-theme-secondary uppercase tracking-wider">Stock</th>
@@ -517,7 +564,16 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm font-medium text-theme-primary">{product.name}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
                                                     <div className="text-sm text-theme-secondary">{product.sku}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-theme-surface text-theme-secondary">
+                                                        {product.category}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
                                                     {product.colors && product.colors.length > 0 && (
                                                         <div className="flex flex-wrap gap-1 mt-1">
                                                             {product.colors.map(color => (
@@ -525,11 +581,6 @@ export default function ProductsPage() {
                                                             ))}
                                                         </div>
                                                     )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-theme-surface text-theme-secondary">
-                                                        {product.category}
-                                                    </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-theme-primary">
                                                     LKR {product.price.toFixed(2)}
@@ -545,9 +596,9 @@ export default function ProductsPage() {
                                                     <span className={`text-sm font-bold ${product.stock <= product.reorderLevel ? 'text-yellow-400' : 'text-green-400'}`}>
                                                         {product.stock}
                                                     </span>
-                                                    {product.stock <= product.reorderLevel && (
+                                                    {/* {product.stock <= product.reorderLevel && (
                                                         <div className="text-xs text-yellow-500 mt-1">Low Stock</div>
-                                                    )}
+                                                    )} */}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <div className="flex items-center justify-end gap-2">
@@ -571,6 +622,66 @@ export default function ProductsPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-4 glass-card p-4">
+                            <div className="text-sm text-theme-secondary">
+                                Showing <span className="font-semibold text-theme-primary">{(currentPage - 1) * limit + 1}</span> to{' '}
+                                <span className="font-semibold text-theme-primary">
+                                    {Math.min(currentPage * limit, totalItems)}
+                                </span>{' '}
+                                of <span className="font-semibold text-theme-primary">{totalItems}</span> items
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-2 rounded-lg border border-theme-border hover:bg-theme-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronLeft className="w-5 h-5 text-theme-primary" />
+                                </button>
+
+                                <div className="flex gap-1">
+                                    {[...Array(totalPages)].map((_, i) => {
+                                        const page = i + 1;
+                                        if (
+                                            page === 1 ||
+                                            page === totalPages ||
+                                            (page >= currentPage - 1 && page <= currentPage + 1)
+                                        ) {
+                                            return (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${currentPage === page
+                                                        ? 'bg-primary-500 text-white font-bold shadow-lg shadow-primary-500/20'
+                                                        : 'hover:bg-theme-surface text-theme-secondary'
+                                                        }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            );
+                                        } else if (
+                                            (page === currentPage - 2 && page > 1) ||
+                                            (page === currentPage + 2 && page < totalPages)
+                                        ) {
+                                            return <span key={page} className="flex items-center px-1 text-theme-secondary">...</span>;
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="p-2 rounded-lg border border-theme-border hover:bg-theme-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronRight className="w-5 h-5 text-theme-primary" />
+                                </button>
                             </div>
                         </div>
                     )}
@@ -741,18 +852,13 @@ export default function ProductsPage() {
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 py-2">
-                            <input
-                                type="checkbox"
-                                id="isHaveLid"
-                                checked={formData.isHaveLid}
-                                onChange={(e) => setFormData({ ...formData, isHaveLid: e.target.checked })}
-                                className="w-4 h-4 rounded border-theme-border text-primary-500 focus:ring-primary-500 bg-theme-surface"
-                            />
-                            <label htmlFor="isHaveLid" className="text-sm font-medium text-theme-secondary cursor-pointer">
-                                Has Lid?
-                            </label>
-                        </div>
+                        <ToggleSwitch
+                            label="Special Features"
+                            rightLabel="Has Lid?"
+                            checked={formData.isHaveLid}
+                            onChange={(checked: boolean) => setFormData({ ...formData, isHaveLid: checked })}
+                            description="Check if this product includes a lid"
+                        />
 
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-3">

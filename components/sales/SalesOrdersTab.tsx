@@ -7,6 +7,7 @@ import { Plus, Search, Eye, Edit, Trash2, CheckCircle } from 'lucide-react';
 import SearchableSelect from '@/components/SearchableSelect';
 import { SalesOrder, Customer, Product, EnhancedSaleItem, Color } from '@/types';
 import * as api from '@/lib/api';
+import ToggleSwitch from '@/components/ToggleSwitch';
 // import { products as initialProducts } from '@/data/mockData'; // We will fetch products too
 
 export default function SalesOrdersTab() {
@@ -37,8 +38,12 @@ export default function SalesOrdersTab() {
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [discount, setDiscount] = useState('0');
+    const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
     const [selectedColor, setSelectedColor] = useState('');
     const [colorsList, setColorsList] = useState<Color[]>([]);
+
+    const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+    const [isEditingItem, setIsEditingItem] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -99,7 +104,7 @@ export default function SalesOrdersTab() {
 
             setOrders(mappedOrders);
             setCustomers(customersData);
-            setProducts(productsData.map((p: any) => ({
+            setProducts((productsData.data || []).map((p: any) => ({
                 ...p,
                 id: p.id.toString(),
                 price: parseFloat(p.price) || 0,
@@ -129,7 +134,7 @@ export default function SalesOrdersTab() {
     const calculateTotals = () => {
         const subtotal = orderItems.reduce((sum: number, item: EnhancedSaleItem) => sum + (item.quantity * item.price), 0);
         const totalDiscount = orderItems.reduce((sum: number, item: EnhancedSaleItem) => sum + item.discount, 0);
-        const tax = (subtotal - totalDiscount) * 0.1;
+        const tax = formData.orderType === 'Tax' ? (subtotal - totalDiscount) * 0.1 : 0;
         const total = subtotal - totalDiscount + tax;
         return { subtotal, tax, totalDiscount, total };
     };
@@ -146,10 +151,27 @@ export default function SalesOrdersTab() {
             setOrderItems(order.items);
         } else {
             setEditingOrder(null);
-            setFormData({ customerId: '', deliveryDate: '', notes: '', orderType: 'General' });
+            setFormData({ customerId: '', deliveryDate: new Date().toISOString().split('T')[0], notes: '', orderType: 'General' });
             setOrderItems([]);
         }
+        setEditingItemIndex(null);
+        setIsEditingItem(false);
         setIsModalOpen(true);
+    };
+
+    const handleEditItem = (index: number) => {
+        const item = orderItems[index];
+        setSelectedProduct(item.productId);
+        setQuantity(item.quantity.toString());
+        // For discount, we need to know if it was percentage or amount.
+        // Currently EnhancedSaleItem only stores the computed discount amount.
+        // But the field 'discount' in state is what the user typed.
+        // Let's assume it was an amount for now, or just fill the amount.
+        setDiscount(item.discount.toString());
+        setDiscountType('amount');
+        setSelectedColor(item.colorId || '');
+        setEditingItemIndex(index);
+        setIsEditingItem(true);
     };
 
     const handleUpdateItemColor = (productId: string, colorId: string) => {
@@ -164,44 +186,29 @@ export default function SalesOrdersTab() {
     const handleAddItem = () => {
         if (!selectedProduct || !quantity) return;
 
-        const product = products.find((p: any) => p.id.toString() === selectedProduct); // Loose equality for ID if string/number mismatch
+        const product = products.find((p: any) => p.id.toString() === selectedProduct);
         if (!product) return;
 
-        // Determine effective price
-        // Mock data logic for customer prices removed for simplicity or need to fetch customer specific price?
-        // Basic implementation: use product price.
-        // If we want customer price, we need to check if customer object has pricing. Backend Customer model doesn't have 'customerPrices' JSON field yet (FRD mentioned it, I ddn't implement JSON field fully or it's just 'customerPrices' field?).
-        // Model Customer has: name, email, etc. NO customerPrices JSON.
-        // So I'll stick to product.price.
-
         let price = typeof product.price === 'string' ? parseFloat(product.price) : product.price;
-
         const qty = parseInt(quantity);
-        const disc = parseFloat(discount) || 0;
+        const discInput = parseFloat(discount) || 0;
         const itemSubtotal = qty * price;
-        const itemTax = (itemSubtotal - disc) * 0.1;
-        const itemTotal = itemSubtotal - disc + itemTax;
 
-        const existingItem = orderItems.find(item =>
-            item.productId === product.id.toString() &&
-            (item.colorId === (selectedColor || undefined))
-        );
-
-        if (existingItem) {
-            setOrderItems(orderItems.map(item =>
-                item.productId === product.id.toString() && (item.colorId === (selectedColor || undefined))
-                    ? {
-                        ...item,
-                        quantity: item.quantity + qty,
-                        discount: item.discount + disc,
-                        tax: ((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1,
-                        total: ((item.quantity + qty) * item.price) - (item.discount + disc) + (((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1),
-                    }
-                    : item
-            ));
+        let disc = 0;
+        if (discountType === 'percent') {
+            disc = (itemSubtotal * discInput) / 100;
         } else {
-            const color = colorsList.find(c => c.id.toString() === selectedColor);
-            setOrderItems([...orderItems, {
+            disc = discInput;
+        }
+
+        const itemTax = formData.orderType === 'Tax' ? (itemSubtotal - disc) * 0.1 : 0;
+        const itemTotal = itemSubtotal - disc + itemTax;
+        const color = colorsList.find(c => c.id.toString() === selectedColor);
+
+        if (isEditingItem && editingItemIndex !== null) {
+            const updatedItems = [...orderItems];
+            updatedItems[editingItemIndex] = {
+                ...updatedItems[editingItemIndex],
                 productId: product.id.toString(),
                 productName: product.name,
                 uom: product.uom,
@@ -213,7 +220,43 @@ export default function SalesOrdersTab() {
                 colorId: selectedColor || undefined,
                 colorName: color?.name || undefined,
                 isHaveLid: product.isHaveLid
-            }]);
+            };
+            setOrderItems(updatedItems);
+            setIsEditingItem(false);
+            setEditingItemIndex(null);
+        } else {
+            const existingItem = orderItems.find(item =>
+                item.productId === product.id.toString() &&
+                (item.colorId === (selectedColor || undefined))
+            );
+
+            if (existingItem) {
+                setOrderItems(orderItems.map(item =>
+                    item.productId === product.id.toString() && (item.colorId === (selectedColor || undefined))
+                        ? {
+                            ...item,
+                            quantity: item.quantity + qty,
+                            discount: item.discount + disc,
+                            tax: formData.orderType === 'Tax' ? ((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1 : 0,
+                            total: ((item.quantity + qty) * item.price) - (item.discount + disc) + (formData.orderType === 'Tax' ? ((item.quantity + qty) * item.price - (item.discount + disc)) * 0.1 : 0),
+                        }
+                        : item
+                ));
+            } else {
+                setOrderItems([...orderItems, {
+                    productId: product.id.toString(),
+                    productName: product.name,
+                    uom: product.uom,
+                    quantity: qty,
+                    price: price,
+                    discount: disc,
+                    tax: itemTax,
+                    total: itemTotal,
+                    colorId: selectedColor || undefined,
+                    colorName: color?.name || undefined,
+                    isHaveLid: product.isHaveLid
+                }]);
+            }
         }
 
         setSelectedProduct('');
@@ -334,15 +377,15 @@ export default function SalesOrdersTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Order Value</p>
-                    <p className="text-2xl font-bold text-theme-primary">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.subtotal, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-theme-primary">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.subtotal, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Discount</p>
-                    <p className="text-2xl font-bold text-yellow-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.discount, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-yellow-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.discount, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Net Amount</p>
-                    <p className="text-2xl font-bold text-green-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.total, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-green-400">LKR {orders.reduce((sum: number, o: SalesOrder) => sum + o.total, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
             </div>
 
@@ -392,7 +435,7 @@ export default function SalesOrdersTab() {
                                 <td className="font-semibold">{order.orderNumber}</td>
                                 <td>{order.customerName}</td>
                                 <td>{order.items.length} items</td>
-                                <td className="font-bold">LKR {order.total.toFixed(2)}</td>
+                                <td className="font-bold text-right">{order.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td>
                                     <span className={`badge ${order.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
                                         {order.orderType}
@@ -438,8 +481,8 @@ export default function SalesOrdersTab() {
 
             {/* Create/Edit Modal */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingOrder ? 'Edit Sales Order' : 'New Sales Order'}>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
                             <SearchableSelect
@@ -450,7 +493,7 @@ export default function SalesOrdersTab() {
                                 options={customers.filter(c => c.status === 'active').map(c => ({
                                     value: c.id,
                                     label: c.name,
-                                    sublabel: c.email
+                                    sublabel: c.phone
                                 }))}
                             />
                         </div>
@@ -459,17 +502,14 @@ export default function SalesOrdersTab() {
                             <input type="date" value={formData.deliveryDate} onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })} className="input-field" />
                         </div>
                         {canAccessTax && (
-                            <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-2">Order Type</label>
-                                <select
-                                    value={formData.orderType}
-                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
-                                    className="input-field"
-                                >
-                                    <option value="General">General</option>
-                                    <option value="Tax">Tax</option>
-                                </select>
-                            </div>
+                            <ToggleSwitch
+                                label="Order Type"
+                                leftLabel="General"
+                                rightLabel="Tax"
+                                checked={formData.orderType === 'Tax'}
+                                onChange={(checked: boolean) => setFormData({ ...formData, orderType: checked ? 'Tax' : 'General' })}
+                                description="Select 'Tax' for invoice tracking or 'General' for standard orders"
+                            />
                         )}
                     </div>
 
@@ -485,9 +525,13 @@ export default function SalesOrdersTab() {
                                     options={products.map(p => ({
                                         value: p.id,
                                         label: p.name,
-                                        sublabel: `LKR ${typeof p.price === 'number' ? p.price.toFixed(2) : p.price}`
+                                        sublabel: `LKR ${typeof p.price === 'number' ? p.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : p.price}`
                                     }))}
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-theme-secondary mb-2">Quantity</label>
+                                <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="input-field" placeholder="Qty" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Price</label>
@@ -498,17 +542,22 @@ export default function SalesOrdersTab() {
                                     value={selectedProduct ? (
                                         customers.find(c => c.id.toString() === formData.customerId)?.customerPrices?.[selectedProduct] ||
                                         products.find(p => p.id.toString() === selectedProduct)?.price || 0
-                                    ).toFixed(2) : ''}
+                                    ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
                                     readOnly
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-2">Quantity</label>
-                                <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="input-field" placeholder="Qty" />
-                            </div>
-                            <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Discount</label>
-                                <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field" placeholder="Discount" />
+                                <div className="flex">
+                                    <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field rounded-r-none" placeholder="Value" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setDiscountType(discountType === 'amount' ? 'percent' : 'amount')}
+                                        className="bg-theme-surface border border-theme-border border-l-0 rounded-r-lg px-3 text-theme-primary hover:bg-theme-hover transition-colors font-bold min-w-[50px]"
+                                    >
+                                        {discountType === 'amount' ? 'LKR' : '%'}
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-theme-secondary mb-2">Color</label>
@@ -523,7 +572,25 @@ export default function SalesOrdersTab() {
 
 
 
-                        <button type="button" onClick={handleAddItem} className="btn-secondary mb-4">Add Item</button>
+                        <button type="button" onClick={handleAddItem} className="btn-secondary mb-4">
+                            {isEditingItem ? 'Update Item' : 'Add Item'}
+                        </button>
+                        {isEditingItem && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsEditingItem(false);
+                                    setEditingItemIndex(null);
+                                    setSelectedProduct('');
+                                    setQuantity('1');
+                                    setDiscount('0');
+                                    setSelectedColor('');
+                                }}
+                                className="btn-outline ml-2 mb-4"
+                            >
+                                Cancel Edit
+                            </button>
+                        )}
 
                         {orderItems.length > 0 && (
                             <div className="overflow-x-auto mb-4">
@@ -531,9 +598,9 @@ export default function SalesOrdersTab() {
                                     <thead>
                                         <tr className="border-b-2 border-theme-border">
                                             <th className="text-left text-sm font-semibold text-theme-secondary pb-3 pr-4">Item Name</th>
+                                            <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Qty</th>
                                             <th className="text-center text-sm font-semibold text-theme-secondary pb-3 px-2">UOM</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Price</th>
-                                            <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Qty</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Discount</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Disc. Price</th>
                                             <th className="text-right text-sm font-semibold text-theme-secondary pb-3 px-2">Value</th>
@@ -542,19 +609,19 @@ export default function SalesOrdersTab() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {orderItems.map((item) => {
+                                        {orderItems.map((item, index) => {
                                             const discountedPrice = item.price - (item.discount / item.quantity);
                                             const lineValue = item.quantity * discountedPrice;
 
                                             return (
                                                 <tr key={item.productId} className="border-b border-theme-border hover:bg-theme-hover transition-colors">
                                                     <td className="py-3 pr-4 text-theme-primary font-medium">{item.productName}</td>
-                                                    <td className="py-3 px-2 text-center text-theme-secondary text-sm">{item.uom || 'pcs'}</td>
-                                                    <td className="py-3 px-2 text-right text-theme-secondary">LKR {item.price.toFixed(2)}</td>
                                                     <td className="py-3 px-2 text-right text-theme-primary font-semibold">{item.quantity}</td>
-                                                    <td className="py-3 px-2 text-right text-yellow-400">LKR {item.discount.toFixed(2)}</td>
-                                                    <td className="py-3 px-2 text-right text-green-400 font-semibold">LKR {discountedPrice.toFixed(2)}</td>
-                                                    <td className="py-3 px-2 text-right text-theme-primary font-bold">LKR {lineValue.toFixed(2)}</td>
+                                                    <td className="py-3 px-2 text-center text-theme-secondary text-sm">{item.uom || 'pcs'}</td>
+                                                    <td className="py-3 px-2 text-right text-theme-secondary">LKR {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="py-3 px-2 text-right text-yellow-400">LKR {item.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="py-3 px-2 text-right text-green-400 font-semibold">LKR {discountedPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="py-3 px-2 text-right text-theme-primary font-bold">LKR {lineValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="py-3 px-2 text-center">
                                                         <select
                                                             value={item.colorId || ''}
@@ -574,14 +641,24 @@ export default function SalesOrdersTab() {
                                                         })()}
                                                     </td>
                                                     <td className="py-3 pl-2 text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveItem(item.productId)}
-                                                            className="p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
-                                                            title="Remove item"
-                                                        >
-                                                            <Trash2 className="w-4 h-4 text-red-400" />
-                                                        </button>
+                                                        <div className="flex justify-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleEditItem(index)}
+                                                                className="p-1.5 hover:bg-blue-500/20 rounded-lg transition-colors"
+                                                                title="Edit item"
+                                                            >
+                                                                <Edit className="w-4 h-4 text-primary-500" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveItem(item.productId)}
+                                                                className="p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
+                                                                title="Remove item"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -619,19 +696,21 @@ export default function SalesOrdersTab() {
                         <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>LKR {totals.subtotal.toFixed(2)}</span>
+                                <span>LKR {totals.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-LKR {totals.totalDiscount.toFixed(2)}</span>
+                                <span>-LKR {totals.totalDiscount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between text-theme-secondary">
-                                <span>Tax (10%):</span>
-                                <span>LKR {totals.tax.toFixed(2)}</span>
-                            </div>
+                            {formData.orderType === 'Tax' && (
+                                <div className="flex justify-between text-theme-secondary">
+                                    <span>Tax:</span>
+                                    <span>LKR {totals.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
-                                <span>LKR {totals.total.toFixed(2)}</span>
+                                <span>LKR {totals.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     )}
@@ -647,7 +726,7 @@ export default function SalesOrdersTab() {
             <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Sales Order Details">
                 {viewingOrder && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <p className="text-sm text-theme-secondary">Order Number</p>
                                 <p className="font-semibold text-theme-primary">{viewingOrder.orderNumber}</p>
@@ -655,6 +734,10 @@ export default function SalesOrdersTab() {
                             <div>
                                 <p className="text-sm text-theme-secondary">Customer</p>
                                 <p className="font-semibold text-theme-primary">{viewingOrder.customerName}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-theme-secondary">Delivery Date</p>
+                                <p className="font-semibold text-theme-primary">{viewingOrder.deliveryDate ? viewingOrder.deliveryDate.toLocaleDateString() : '-'}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-theme-secondary">Status</p>
@@ -665,10 +748,6 @@ export default function SalesOrdersTab() {
                                     {viewingOrder.status}
                                 </span>
                             </div>
-                            <div>
-                                <p className="text-sm text-theme-secondary">Delivery Date</p>
-                                <p className="font-semibold text-theme-primary">{viewingOrder.deliveryDate ? viewingOrder.deliveryDate.toLocaleDateString() : '-'}</p>
-                            </div>
                         </div>
 
                         <div className="border-t border-theme-border pt-6">
@@ -678,14 +757,14 @@ export default function SalesOrdersTab() {
                                     <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.productName}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             {item.isHaveLid && (
                                                 <p className="text-xs text-primary-400 mt-1 italic">
                                                     💡 {item.productName} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
                                                 </p>
                                             )}
                                         </div>
-                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">LKR {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     </div>
                                 ))}
                             </div>
@@ -701,19 +780,21 @@ export default function SalesOrdersTab() {
                         <div className="bg-white/5 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>LKR {viewingOrder.subtotal.toFixed(2)}</span>
+                                <span>LKR {viewingOrder.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-LKR {viewingOrder.discount.toFixed(2)}</span>
+                                <span>-LKR {viewingOrder.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between text-theme-secondary">
-                                <span>Tax:</span>
-                                <span>LKR {viewingOrder.tax.toFixed(2)}</span>
-                            </div>
+                            {viewingOrder.orderType === 'Tax' && (
+                                <div className="flex justify-between text-theme-secondary">
+                                    <span>Tax:</span>
+                                    <span>LKR {viewingOrder.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-white/10 pt-2">
                                 <span>Total:</span>
-                                <span>LKR {viewingOrder.total.toFixed(2)}</span>
+                                <span>LKR {viewingOrder.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 

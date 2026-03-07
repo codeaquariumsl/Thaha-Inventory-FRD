@@ -8,6 +8,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 // import { products } from '@/data/mockData';
 import { SalesInvoice, EnhancedSaleItem, Customer, DeliveryOrder, Product, Color } from '@/types';
 import * as api from '@/lib/api';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { generateInvoicePDF } from '@/lib/pdf-generator';
 
 export default function SalesInvoicesTab() {
@@ -75,8 +76,13 @@ export default function SalesInvoicesTab() {
                 }) : []
             })));
             setCustomers(custData.map((c: any) => ({ ...c, id: c.id.toString() })));
-            setDeliveryOrders(doData.map((d: any) => ({ ...d, id: d.id.toString(), customerId: d.customerId.toString() })));
-            setProducts(prodData.map((p: any) => ({
+            setDeliveryOrders(doData.map((d: any) => ({
+                ...d,
+                id: d.id.toString(),
+                customerId: d.customerId ? d.customerId.toString() : '',
+                deliveryDate: d.deliveryDate ? new Date(d.deliveryDate) : undefined
+            })));
+            setProducts((prodData.data || []).map((p: any) => ({
                 ...p,
                 id: p.id.toString(),
                 price: parseFloat(p.price) || 0,
@@ -104,6 +110,7 @@ export default function SalesInvoicesTab() {
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [discount, setDiscount] = useState('0');
+    const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
     const [selectedColor, setSelectedColor] = useState('');
     const [colorsList, setColorsList] = useState<Color[]>([]);
 
@@ -133,31 +140,33 @@ export default function SalesInvoicesTab() {
                 ...formData,
                 deliveryOrderId,
                 notes: `Generated from Delivery Order ${delivery.deliveryNumber}`,
-                orderType: delivery.orderType || 'General' // Inherit from delivery order
+                orderType: delivery.orderType || 'General'
             });
-            // We need to map delivery items to invoice items (EnhancedSaleItem)
-            // Assuming delivery items have productId, quantity. Price might need to be fetched from products or sales order if available.
-            // Since delivery items structure might differ, let's map it safely.
-            const mappedItems = delivery.items.map(di => {
-                const product = products.find(p => p.id === di.productId);
+
+            const mappedItems = delivery.items.map((di: any) => {
+                const product = di.Product || products.find((p: any) => p.id === di.productId?.toString());
+                const price = parseFloat(di.price) || 0;
+                const qty = parseInt(di.quantity) || 0;
+                const disc = parseFloat(di.discount) || 0;
+                const tax = parseFloat(di.tax) || 0;
+                const total = parseFloat(di.total) || (qty * price - disc + tax);
+
                 return {
-                    productId: di.productId,
+                    productId: di.productId?.toString() || '',
                     productName: product?.name || 'Unknown Product',
                     uom: product?.uom || 'pcs',
-                    quantity: di.quantity,
-                    price: product?.price || 0, // In a real app, this should come from the Sales Order
-                    discount: 0,
-                    tax: 0,
-                    total: (di.quantity * (product?.price || 0)) // Recalculate based on current price
+                    quantity: qty,
+                    price: price,
+                    discount: disc,
+                    tax: tax,
+                    total: total,
+                    colorId: di.colorId?.toString(),
+                    colorName: di.colorName,
+                    isHaveLid: product?.isHaveLid || false
                 };
             });
-            // Re-calculate totals for these items:
-            const itemsWithTotals = mappedItems.map(item => {
-                const sub = item.quantity * item.price;
-                const ax = sub * 0.1;
-                return { ...item, tax: ax, total: sub + ax };
-            });
-            setInvoiceItems(itemsWithTotals);
+
+            setInvoiceItems(mappedItems);
         } else {
             setFormData({
                 ...formData,
@@ -172,7 +181,7 @@ export default function SalesInvoicesTab() {
     const calculateTotals = () => {
         const subtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
         const totalDiscount = invoiceItems.reduce((sum, item) => sum + item.discount, 0);
-        const tax = (subtotal - totalDiscount) * 0.1;
+        const tax = formData.orderType === 'Tax' ? (subtotal - totalDiscount) * 0.1 : 0;
         const total = subtotal - totalDiscount + tax;
         return { subtotal, tax, totalDiscount, total };
     };
@@ -184,10 +193,18 @@ export default function SalesInvoicesTab() {
         if (!product) return;
 
         const qty = parseInt(quantity);
-        const disc = parseFloat(discount) || 0;
-        const itemSubtotal = qty * product.price;
-        const itemTax = (itemSubtotal - disc) * 0.1;
-        const itemTotal = itemSubtotal - disc + itemTax;
+        const discInput = parseFloat(discount) || 0;
+        const subtotal = qty * product.price;
+
+        let disc = 0;
+        if (discountType === 'percent') {
+            disc = (subtotal * discInput) / 100;
+        } else {
+            disc = discInput;
+        }
+
+        const itemTax = formData.orderType === 'Tax' ? (subtotal - disc) * 0.1 : 0;
+        const itemTotal = subtotal - disc + itemTax;
 
         const color = colorsList.find(c => c.id.toString() === selectedColor);
         setInvoiceItems([...invoiceItems, {
@@ -325,7 +342,7 @@ export default function SalesInvoicesTab() {
                     setFormData({
                         customerId: '',
                         deliveryOrderId: '',
-                        dueDate: '',
+                        dueDate: new Date().toISOString().split('T')[0],
                         paymentTerms: 'Net 30',
                         notes: '',
                         orderType: 'General'
@@ -358,7 +375,7 @@ export default function SalesInvoicesTab() {
                 </div>
                 <div className="stat-card">
                     <p className="text-sm text-theme-secondary mb-1">Total Due</p>
-                    <p className="text-2xl font-bold text-theme-primary">LKR {invoices.reduce((sum, i) => sum + i.amountDue, 0).toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-theme-primary">LKR {invoices.reduce((sum, i) => sum + i.amountDue, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
             </div>
 
@@ -402,9 +419,9 @@ export default function SalesInvoicesTab() {
                             <tr key={invoice.id}>
                                 <td className="font-semibold">{invoice.invoiceNumber}</td>
                                 <td>{invoice.customerName}</td>
-                                <td className="font-bold">LKR {invoice.total.toFixed(2)}</td>
-                                <td className="text-green-400">LKR {invoice.amountPaid.toFixed(2)}</td>
-                                <td className="text-red-400">LKR {invoice.amountDue.toFixed(2)}</td>
+                                <td className="font-bold">LKR {invoice.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td className="text-green-400">LKR {invoice.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td className="text-red-400">LKR {invoice.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td>{invoice.dueDate.toLocaleDateString()}</td>
                                 <td>
                                     <span className={`badge ${invoice.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
@@ -473,7 +490,7 @@ export default function SalesInvoicesTab() {
                                 options={customers.filter(c => c.status === 'active').map(c => ({
                                     value: c.id,
                                     label: c.name,
-                                    sublabel: c.email
+                                    sublabel: c.phone
                                 }))}
                             />
                         </div>
@@ -511,18 +528,15 @@ export default function SalesInvoicesTab() {
                             </select>
                         </div>
                         {canAccessTax && (
-                            <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-2">Invoice Type</label>
-                                <select
-                                    value={formData.orderType}
-                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
-                                    className="input-field"
-                                    disabled={!!formData.deliveryOrderId} // Disable if inherited from Delivery Order
-                                >
-                                    <option value="General">General</option>
-                                    <option value="Tax">Tax</option>
-                                </select>
-                            </div>
+                            <ToggleSwitch
+                                label="Invoice Type"
+                                leftLabel="General"
+                                rightLabel="Tax"
+                                checked={formData.orderType === 'Tax'}
+                                onChange={(checked: boolean) => setFormData({ ...formData, orderType: checked ? 'Tax' : 'General' })}
+                                disabled={!!formData.deliveryOrderId}
+                                description={!!formData.deliveryOrderId ? "Inherited from Delivery Order" : "Select 'Tax' for invoice tracking or 'General' for standard invoices"}
+                            />
                         )}
                     </div>
 
@@ -543,7 +557,16 @@ export default function SalesInvoicesTab() {
                                     />
                                 </div>
                                 <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="input-field" placeholder="Qty" />
-                                <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field" placeholder="Discount" />
+                                <div className="flex">
+                                    <input type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} className="input-field rounded-r-none" placeholder="Value" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setDiscountType(discountType === 'amount' ? 'percent' : 'amount')}
+                                        className="bg-theme-surface border border-theme-border border-l-0 rounded-r-lg px-2 text-theme-primary hover:bg-theme-hover transition-colors font-bold min-w-[45px] text-xs"
+                                    >
+                                        {discountType === 'amount' ? 'LKR' : '%'}
+                                    </button>
+                                </div>
                                 <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="input-field">
                                     <option value="">No Color</option>
                                     {products.find(p => p.id === selectedProduct)?.colors?.map(c => (
@@ -578,7 +601,7 @@ export default function SalesInvoicesTab() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                                <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <select
@@ -596,7 +619,7 @@ export default function SalesInvoicesTab() {
                                                         <option key={c.id} value={c.id}>{c.name}</option>
                                                     ))}
                                                 </select>
-                                                <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
+                                                <p className="font-bold text-theme-primary">LKR {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
                                         </div>
                                     );
@@ -632,19 +655,21 @@ export default function SalesInvoicesTab() {
                         <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>LKR {totals.subtotal.toFixed(2)}</span>
+                                <span>LKR {totals.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-LKR {totals.totalDiscount.toFixed(2)}</span>
+                                <span>-LKR {totals.totalDiscount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between text-theme-secondary">
-                                <span>Tax (10%):</span>
-                                <span>LKR {totals.tax.toFixed(2)}</span>
-                            </div>
+                            {formData.orderType === 'Tax' && (
+                                <div className="flex justify-between text-theme-secondary">
+                                    <span>Tax:</span>
+                                    <span>LKR {totals.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
-                                <span>LKR {totals.total.toFixed(2)}</span>
+                                <span>LKR {totals.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     )}
@@ -660,7 +685,7 @@ export default function SalesInvoicesTab() {
             <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Invoice Details">
                 {viewingInvoice && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <p className="text-sm text-theme-secondary">Invoice Number</p>
                                 <p className="font-semibold text-theme-primary">{viewingInvoice.invoiceNumber}</p>
@@ -686,14 +711,14 @@ export default function SalesInvoicesTab() {
                                     <div key={index} className="flex justify-between p-3 bg-theme-surface rounded-lg">
                                         <div>
                                             <p className="font-medium text-theme-primary">{item.Product?.name || item.productName || 'Unknown'}{item.colorName ? ` - ${item.colorName}` : ''}</p>
-                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toFixed(2)}</p>
+                                            <p className="text-sm text-theme-secondary">{item.quantity} × LKR {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             {item.isHaveLid && (
                                                 <p className="text-xs text-primary-400 mt-1 italic">
                                                     💡 {item.Product?.name || item.productName || 'Unknown'}{item.colorName ? ` - ${item.colorName}` : ''} with {item.colorName || 'selected'} Lid quantity: {item.quantity}
                                                 </p>
                                             )}
                                         </div>
-                                        <p className="font-bold text-theme-primary">LKR {item.total.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">LKR {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     </div>
                                 ))}
                             </div>
@@ -702,27 +727,29 @@ export default function SalesInvoicesTab() {
                         <div className="bg-theme-surface rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Subtotal:</span>
-                                <span>LKR {viewingInvoice.subtotal.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-theme-secondary">
                                 <span>Discount:</span>
-                                <span>-LKR {viewingInvoice.discount.toFixed(2)}</span>
+                                <span>-LKR {viewingInvoice.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between text-theme-secondary">
-                                <span>Tax:</span>
-                                <span>LKR {viewingInvoice.tax.toFixed(2)}</span>
-                            </div>
+                            {viewingInvoice.orderType === 'Tax' && (
+                                <div className="flex justify-between text-theme-secondary">
+                                    <span>Tax:</span>
+                                    <span>LKR {viewingInvoice.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-xl font-bold text-theme-primary border-t border-theme-border pt-2">
                                 <span>Total:</span>
-                                <span>LKR {viewingInvoice.total.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-green-500 border-t border-theme-border pt-2">
                                 <span>Amount Paid:</span>
-                                <span>LKR {viewingInvoice.amountPaid.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-red-500">
                                 <span>Amount Due:</span>
-                                <span>LKR {viewingInvoice.amountDue.toFixed(2)}</span>
+                                <span>LKR {viewingInvoice.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 

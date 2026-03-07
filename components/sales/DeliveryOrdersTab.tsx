@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@/components/Modal';
-import { Plus, Search, Eye, Truck, CheckCircle, Trash2, FileText, CheckSquare, Printer } from 'lucide-react';
+import { Plus, Search, Eye, Truck, CheckCircle, Trash2, FileText, CheckSquare, Printer, Edit } from 'lucide-react';
 import SearchableSelect from '@/components/SearchableSelect';
 import { DeliveryOrder, EnhancedSaleItem, SalesInvoice, Customer, SalesOrder, Product, Color } from '@/types';
 import * as api from '@/lib/api';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { generateDeliveryOrderPDF } from '@/lib/pdf-generator';
 // Remove mock data imports to avoid unused variable errors if we are deleting them later or simply comment them out if we might fallback
 // import { deliveryOrders as initialDeliveries, customers, salesOrders, salesInvoices } from '@/data/salesData';
@@ -42,8 +43,15 @@ export default function DeliveryOrdersTab() {
     const [deliveryItems, setDeliveryItems] = useState<EnhancedSaleItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState('');
     const [quantity, setQuantity] = useState('1');
+    const [discount, setDiscount] = useState('0');
+    const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
     const [selectedColor, setSelectedColor] = useState('');
     const [colorsList, setColorsList] = useState<Color[]>([]);
+
+    const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+    const [isEditingItem, setIsEditingItem] = useState(false);
+    const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
+    const [isEditingDelivery, setIsEditingDelivery] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -62,26 +70,71 @@ export default function DeliveryOrdersTab() {
             ]);
             setColorsList(colorsData || []);
 
+            const mappedCustomers = custData.map((c: any) => ({
+                ...c,
+                id: c.id.toString(),
+                creditLimit: parseFloat(c.creditLimit) || 0,
+                balance: parseFloat(c.currentBalance) || 0
+            }));
+            setCustomers(mappedCustomers);
+
+            const mappedSalesOrders = (soData || []).map((so: any) => ({
+                ...so,
+                id: so.id.toString(),
+                customerId: so.customerId?.toString() || '',
+                subtotal: parseFloat(so.subtotal) || 0,
+                tax: parseFloat(so.tax) || 0,
+                discount: parseFloat(so.discount) || 0,
+                total: parseFloat(so.total) || 0,
+                items: (so.items || []).map((item: any) => {
+                    const product = item.Product || (prodData.data || []).find((p: any) => p.id.toString() === item.productId?.toString());
+                    return {
+                        ...item,
+                        productId: item.productId?.toString() || '',
+                        productName: product ? product.name : (item.productName || 'Unknown'),
+                        uom: product ? product.uom : (item.uom || 'pcs'),
+                        price: parseFloat(item.price) || 0,
+                        quantity: parseInt(item.quantity) || 0,
+                        discount: parseFloat(item.discount) || 0,
+                        tax: parseFloat(item.tax) || 0,
+                        total: parseFloat(item.total) || 0,
+                        isHaveLid: product ? product.isHaveLid : false
+                    };
+                })
+            }));
+            setSalesOrders(mappedSalesOrders);
+
             setDeliveries(delData.map((d: any) => {
-                const salesOrder = d.SalesOrder || {};
-                const customer = salesOrder.Customer || {};
+                // Find sales order either from mapped list or nested in delivery order
+                const salesOrder = mappedSalesOrders.find((so: any) => so.id === d.salesOrderId?.toString()) || d.SalesOrder || {};
+
+                // Determine Customer: prefer direct Customer object, then SalesOrder's Customer, then lookup by ID
+                const customer = d.Customer ||
+                    salesOrder.Customer ||
+                    (d.customerId && d.customerId !== 0 ? mappedCustomers.find((c: any) => c.id === d.customerId.toString()) : null) ||
+                    (salesOrder.customerId ? mappedCustomers.find((c: any) => c.id === salesOrder.customerId.toString()) : null);
+
+                // Determine items: prefer items explicitly on delivery order, fallback to sales order items
+                const rawItems = (d.items && d.items.length > 0) ? d.items : (salesOrder.items || []);
 
                 return {
                     ...d,
                     id: d.id.toString(),
-                    customerId: salesOrder.customerId ? salesOrder.customerId.toString() : '',
-                    customerName: customer.name || 'Unknown',
+                    customerId: d.customerId && d.customerId !== 0 ? d.customerId.toString() : (salesOrder.customerId ? salesOrder.customerId.toString() : ''),
+                    customerName: customer?.name || 'Unknown',
                     salesOrderId: d.salesOrderId ? d.salesOrderId.toString() : '',
-                    salesOrderNumber: salesOrder.orderNumber || '-',
-                    deliveryAddress: d.shippingAddress || '',
-                    items: (d.items || salesOrder.items || []).map((item: any) => {
+                    salesOrderNumber: salesOrder.orderNumber || d.SalesOrder?.orderNumber || '-',
+                    deliveryAddress: d.deliveryAddress || '',
+                    items: rawItems.map((item: any) => {
                         const colorIdStr = item.colorId ? item.colorId.toString() : undefined;
                         const matchedColor = colorIdStr ? (colorsData || []).find((c: any) => c.id.toString() === colorIdStr) : null;
+                        const product = item.Product || (prodData.data || []).find((p: any) => p.id.toString() === item.productId?.toString());
+
                         return {
                             ...item,
                             productId: item.productId ? item.productId.toString() : '',
-                            productName: item.Product ? item.Product.name : (item.productName || 'Unknown'),
-                            uom: item.Product ? item.Product.uom : (item.uom || 'pcs'),
+                            productName: product ? product.name : (item.productName || 'Unknown'),
+                            uom: product ? product.uom : (item.uom || 'pcs'),
                             price: parseFloat(item.price) || 0,
                             quantity: parseInt(item.quantity) || 0,
                             discount: parseFloat(item.discount) || 0,
@@ -89,16 +142,15 @@ export default function DeliveryOrdersTab() {
                             total: parseFloat(item.total) || 0,
                             colorId: colorIdStr,
                             colorName: matchedColor?.name || undefined,
-                            isHaveLid: item.Product ? item.Product.isHaveLid : false
+                            isHaveLid: product ? product.isHaveLid : false
                         };
                     }),
                     deliveryDate: d.deliveryDate ? new Date(d.deliveryDate) : undefined,
                     createdAt: new Date(d.createdAt)
                 };
             }));
-            setCustomers(custData);
-            setSalesOrders(soData);
-            setProducts(prodData.map((p: any) => ({
+
+            setProducts((prodData.data || []).map((p: any) => ({
                 ...p,
                 id: p.id.toString(),
                 price: parseFloat(p.price) || 0,
@@ -127,26 +179,66 @@ export default function DeliveryOrdersTab() {
             customerId: '',
             salesOrderId: '',
             deliveryAddress: '',
-            deliveryDate: '',
+            deliveryDate: new Date().toISOString().split('T')[0],
             trackingNumber: '',
             notes: '',
             orderType: 'General',
         });
+        setEditingItemIndex(null);
+        setIsEditingItem(false);
+        setEditingDeliveryId(null);
+        setIsEditingDelivery(false);
         setDeliveryItems([]);
         setIsCreateModalOpen(true);
     };
 
+    const handleEditDelivery = (delivery: DeliveryOrder) => {
+        setFormData({
+            customerId: delivery.customerId,
+            salesOrderId: delivery.salesOrderId,
+            deliveryAddress: delivery.deliveryAddress,
+            deliveryDate: delivery.deliveryDate ? new Date(delivery.deliveryDate).toISOString().split('T')[0] : '',
+            trackingNumber: delivery.trackingNumber || '',
+            notes: delivery.notes || '',
+            orderType: delivery.orderType,
+        });
+        setDeliveryItems([...delivery.items]);
+        setEditingDeliveryId(delivery.id);
+        setIsEditingDelivery(true);
+        setIsCreateModalOpen(true);
+    };
+
+    const handleEditItem = (index: number) => {
+        const item = deliveryItems[index];
+        setSelectedProduct(item.productId);
+        setQuantity(item.quantity.toString());
+        setDiscount(item.discount.toString());
+        setDiscountType('amount');
+        setSelectedColor(item.colorId || '');
+        setEditingItemIndex(index);
+        setIsEditingItem(true);
+    };
+
     const handleCustomerChange = (customerId: string) => {
-        const customer = customers.find(c => c.id.toString() === customerId); // ID type check
-        if (customer) {
-            setFormData({
-                ...formData,
-                customerId,
-                deliveryAddress: `${customer.address || ''}, ${customer.city || ''}, ${customer.country || ''}`,
-                salesOrderId: '',
-            });
+        if (!customerId) {
+            setFormData(prev => ({ ...prev, customerId: '', salesOrderId: '', deliveryAddress: '' }));
             setDeliveryItems([]);
+            return;
         }
+        const customer = customers.find(c => c.id.toString() === customerId);
+        const addressParts = [
+            customer?.address,
+            customer?.city,
+            customer?.country,
+        ].filter(Boolean);
+        const deliveryAddress = addressParts.join(', ');
+        setFormData(prev => ({
+            ...prev,
+            customerId,
+            deliveryAddress,
+            salesOrderId: '',
+        }));
+        setDeliveryItems([]);
     };
 
     const handleSalesOrderChange = (salesOrderId: string) => {
@@ -167,53 +259,85 @@ export default function DeliveryOrdersTab() {
     const handleAddItem = () => {
         if (!selectedProduct || !quantity) return;
 
-        const product = products.find(p => p.id.toString() === selectedProduct.toString());
+        const product = products.find((p: any) => p.id.toString() === selectedProduct);
         if (!product) return;
 
-        // Get customer-specific price if available
-        const customer = customers.find(c => c.id.toString() === formData.customerId);
-        let itemPrice = product.price;
-        if (customer && customer.customerPrices && customer.customerPrices[product.id]) {
-            itemPrice = customer.customerPrices[product.id];
-        }
+        const customer = customers.find(c => c.id === formData.customerId);
+        const itemPrice = customer?.customerPrices?.[product.id] || product.price;
 
         const qty = parseInt(quantity);
-        const itemTotal = qty * itemPrice;
+        const discInput = parseFloat(discount) || 0;
+        const subtotal = qty * itemPrice;
 
-        const existingItemIndex = deliveryItems.findIndex(item =>
-            item.productId === product.id.toString() &&
-            (item.colorId === (selectedColor || undefined))
-        );
-
-        if (existingItemIndex > -1) {
-            const updatedItems = [...deliveryItems];
-            const existing = updatedItems[existingItemIndex];
-            const newQty = existing.quantity + qty;
-            updatedItems[existingItemIndex] = {
-                ...existing,
-                quantity: newQty,
-                total: newQty * existing.price // Simplification, normally recalculate tax/discount
-            };
-            setDeliveryItems(updatedItems);
+        let disc = 0;
+        if (discountType === 'percent') {
+            disc = (subtotal * discInput) / 100;
         } else {
-            const color = colorsList.find(c => c.id.toString() === selectedColor);
-            setDeliveryItems([...deliveryItems, {
+            disc = discInput;
+        }
+
+        const itemTotal = subtotal - disc;
+        const color = colorsList.find(c => c.id.toString() === selectedColor);
+
+        if (isEditingItem && editingItemIndex !== null) {
+            const updatedItems = [...deliveryItems];
+            updatedItems[editingItemIndex] = {
+                ...updatedItems[editingItemIndex],
                 productId: product.id.toString(),
                 productName: product.name,
                 uom: product.uom,
                 quantity: qty,
                 price: itemPrice,
-                discount: 0,
+                discount: disc,
                 tax: 0,
                 total: itemTotal,
                 colorId: selectedColor || undefined,
                 colorName: color?.name || undefined,
                 isHaveLid: product.isHaveLid
-            }]);
+            };
+            setDeliveryItems(updatedItems);
+            setIsEditingItem(false);
+            setEditingItemIndex(null);
+        } else {
+            const existingItemIndex = deliveryItems.findIndex(item =>
+                item.productId === product.id.toString() &&
+                (item.colorId === (selectedColor || undefined))
+            );
+
+            if (existingItemIndex > -1) {
+                const updatedItems = [...deliveryItems];
+                const existing = updatedItems[existingItemIndex];
+                const newQty = existing.quantity + qty;
+                const newDiscount = (existing.discount || 0) + disc;
+                const newTotal = (newQty * existing.price) - newDiscount;
+
+                updatedItems[existingItemIndex] = {
+                    ...existing,
+                    quantity: newQty,
+                    discount: newDiscount,
+                    total: newTotal
+                };
+                setDeliveryItems(updatedItems);
+            } else {
+                setDeliveryItems([...deliveryItems, {
+                    productId: product.id.toString(),
+                    productName: product.name,
+                    uom: product.uom,
+                    quantity: qty,
+                    price: itemPrice,
+                    discount: disc,
+                    tax: 0,
+                    total: itemTotal,
+                    colorId: selectedColor || undefined,
+                    colorName: color?.name || undefined,
+                    isHaveLid: product.isHaveLid
+                }]);
+            }
         }
 
         setSelectedProduct('');
         setQuantity('1');
+        setDiscount('0');
         setSelectedColor('');
     };
 
@@ -267,6 +391,11 @@ export default function DeliveryOrdersTab() {
 
         const salesOrder = formData.salesOrderId ? salesOrders.find(o => o.id.toString() === formData.salesOrderId) : undefined;
 
+        const subtotal = deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+        const discount = deliveryItems.reduce((sum, item) => sum + (item.discount || 0), 0);
+        const tax = deliveryItems.reduce((sum, item) => sum + (item.tax || 0), 0);
+        const total = subtotal - discount + (formData.orderType === 'Tax' ? tax : 0);
+
         const payload = {
             salesOrderId: formData.salesOrderId || null,
             customerId: formData.customerId,
@@ -275,6 +404,10 @@ export default function DeliveryOrdersTab() {
             trackingNumber: formData.trackingNumber,
             notes: formData.notes,
             orderType: formData.orderType,
+            subtotal,
+            discount,
+            tax,
+            total,
             items: deliveryItems.map(item => ({
                 ...item,
                 colorId: item.colorId || null,
@@ -282,11 +415,17 @@ export default function DeliveryOrdersTab() {
         };
 
         try {
-            await api.createDeliveryOrder(payload);
+            if (isEditingDelivery && editingDeliveryId) {
+                await api.updateDeliveryOrder(editingDeliveryId, payload);
+                alert('Delivery order updated successfully');
+            } else {
+                await api.createDeliveryOrder(payload);
+                alert('Delivery order created successfully');
+            }
             loadData();
             setIsCreateModalOpen(false);
         } catch (error: any) {
-            alert('Failed to create delivery order: ' + error.message);
+            alert('Failed to save delivery order: ' + error.message);
         }
     };
 
@@ -459,9 +598,14 @@ export default function DeliveryOrdersTab() {
                                             </button>
                                         )} */}
                                         {delivery.status === 'Pending' && (
-                                            <button onClick={() => handleDelete(delivery.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Delete">
-                                                <Trash2 className="w-4 h-4 text-red-500" />
-                                            </button>
+                                            <>
+                                                <button onClick={() => handleEditDelivery(delivery)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Edit">
+                                                    <Edit className="w-4 h-4 text-blue-500" />
+                                                </button>
+                                                <button onClick={() => handleDelete(delivery.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Delete">
+                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                </button>
+                                            </>
                                         )}
                                         {delivery.status !== 'Pending' && (
                                             <button onClick={() => handlePrintDeliveryOrder(delivery.id)} className="p-2 hover:bg-theme-hover rounded-lg transition-colors" title="Print">
@@ -477,9 +621,9 @@ export default function DeliveryOrdersTab() {
             </div>
 
             {/* Create Delivery Order Modal */}
-            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="New Delivery Order">
+            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title={isEditingDelivery ? "Edit Delivery Order" : "New Delivery Order"}>
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Customer *</label>
                             <SearchableSelect
@@ -490,7 +634,7 @@ export default function DeliveryOrdersTab() {
                                 options={customers.filter(c => c.status === 'active').map(c => ({
                                     value: c.id,
                                     label: c.name,
-                                    sublabel: c.email
+                                    sublabel: c.phone
                                 }))}
                             />
                         </div>
@@ -512,18 +656,6 @@ export default function DeliveryOrdersTab() {
                             </select>
                         </div>
 
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-theme-secondary mb-2">Delivery Address *</label>
-                            <input
-                                type="text"
-                                required
-                                value={formData.deliveryAddress}
-                                onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
-                                className="input-field"
-                                placeholder="Full delivery address"
-                            />
-                        </div>
-
                         <div>
                             <label className="block text-sm font-medium text-theme-secondary mb-2">Delivery Date</label>
                             <input
@@ -531,6 +663,18 @@ export default function DeliveryOrdersTab() {
                                 value={formData.deliveryDate}
                                 onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
                                 className="input-field"
+                            />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-theme-secondary mb-2">Delivery Address *</label>
+                            <input
+                                type="text"
+                                required
+                                value={formData.deliveryAddress}
+                                onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                                className="input-field"
+                                placeholder="Full delivery address"
                             />
                         </div>
 
@@ -546,18 +690,15 @@ export default function DeliveryOrdersTab() {
                         </div>
 
                         {canAccessTax && (
-                            <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-2">Order Type</label>
-                                <select
-                                    value={formData.orderType}
-                                    onChange={(e) => setFormData({ ...formData, orderType: e.target.value as 'General' | 'Tax' })}
-                                    className="input-field"
-                                    disabled={!!formData.salesOrderId} // Disable if inherited from Sales Order
-                                >
-                                    <option value="General">General</option>
-                                    <option value="Tax">Tax</option>
-                                </select>
-                            </div>
+                            <ToggleSwitch
+                                label="Order Type"
+                                leftLabel="General"
+                                rightLabel="Tax"
+                                checked={formData.orderType === 'Tax'}
+                                onChange={(checked: boolean) => setFormData({ ...formData, orderType: checked ? 'Tax' : 'General' })}
+                                disabled={!!formData.salesOrderId}
+                                description={!!formData.salesOrderId ? "Inherited from Sales Order" : "Select 'Tax' for invoice tracking or 'General' for standard orders"}
+                            />
                         )}
                     </div>
 
@@ -572,8 +713,9 @@ export default function DeliveryOrdersTab() {
                                     </p>
                                 )}
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-4 items-end">
                                 <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-theme-secondary mb-2">Product</label>
                                     <SearchableSelect
                                         value={selectedProduct}
                                         onChange={(val) => { setSelectedProduct(val); setSelectedColor(''); }}
@@ -587,13 +729,14 @@ export default function DeliveryOrdersTab() {
                                                 value: product.id,
                                                 label: product.name,
                                                 sublabel: hasCustomPrice
-                                                    ? `LKR ${customerPrice.toFixed(2)} (Special) | Stock: ${product.stock} ${product.uom}`
-                                                    : `LKR ${product.price} | Stock: ${product.stock} ${product.uom}`
+                                                    ? `LKR ${customerPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Special) | Stock: ${product.stock} ${product.uom}`
+                                                    : `LKR ${product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Stock: ${product.stock} ${product.uom}`
                                             };
                                         })}
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-theme-secondary mb-2">Color</label>
                                     <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="input-field">
                                         <option value="">No Color</option>
                                         {products.find(p => p.id === selectedProduct)?.colors?.map(c => (
@@ -601,7 +744,8 @@ export default function DeliveryOrdersTab() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="md:col-span-1">
+                                    <label className="block text-sm font-medium text-theme-secondary mb-2">Qty</label>
                                     <input
                                         type="number"
                                         min="1"
@@ -610,9 +754,49 @@ export default function DeliveryOrdersTab() {
                                         className="input-field"
                                         placeholder="Qty"
                                     />
-                                    <button type="button" onClick={handleAddItem} className="btn-secondary whitespace-nowrap">
-                                        Add
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className="block text-sm font-medium text-theme-secondary mb-2">Discount</label>
+                                    <div className="flex">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={discount}
+                                            onChange={(e) => setDiscount(e.target.value)}
+                                            className="input-field rounded-r-none"
+                                            placeholder="Disc"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setDiscountType(discountType === 'amount' ? 'percent' : 'amount')}
+                                            className="bg-theme-surface border border-theme-border border-l-0 rounded-r-lg px-2 text-theme-primary hover:bg-theme-hover transition-colors font-bold min-w-[40px]"
+                                        >
+                                            {discountType === 'amount' ? 'LKR' : '%'}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="md:col-span-1 flex gap-2">
+                                    <button type="button" onClick={handleAddItem} className="btn-secondary w-full h-[42px]">
+                                        {isEditingItem ? 'Update' : 'Add Item'}
                                     </button>
+                                    {isEditingItem && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsEditingItem(false);
+                                                setEditingItemIndex(null);
+                                                setSelectedProduct('');
+                                                setQuantity('1');
+                                                setDiscount('0');
+                                                setSelectedColor('');
+                                            }}
+                                            className="p-2 border border-theme-border rounded-lg hover:bg-theme-hover transition-colors text-theme-secondary"
+                                            title="Cancel Edit"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -625,15 +809,14 @@ export default function DeliveryOrdersTab() {
                         <div className="border-t border-theme-border pt-6 mb-4">
                             <h3 className="text-lg font-semibold text-theme-primary mb-4">Delivery Items</h3>
                             <div className="table-container">
-                                <table className="data-table min-w-[1000px]">
+                                <table className="data-table">
                                     <thead>
                                         <tr>
                                             <th className="text-left">Item Name</th>
-                                            <th className="text-center">UOM</th>
                                             <th className="text-center">Quantity</th>
+                                            <th className="text-center">UOM</th>
                                             <th className="text-right">Unit Price</th>
                                             <th className="text-right">Discount</th>
-                                            <th className="text-right">Tax</th>
                                             <th className="text-right">Total</th>
                                             <th className="text-center">Color</th>
                                             {!formData.salesOrderId && <th className="text-center">Actions</th>}
@@ -643,7 +826,6 @@ export default function DeliveryOrdersTab() {
                                         {deliveryItems.map((item, index) => (
                                             <tr key={item.productId}>
                                                 <td className="font-semibold text-left text-theme-primary">{item.productName}</td>
-                                                <td className="text-center text-theme-secondary">{item.uom}</td>
                                                 <td className="text-center">
                                                     {!formData.salesOrderId ? (
                                                         <input
@@ -657,7 +839,8 @@ export default function DeliveryOrdersTab() {
                                                         <span className="text-theme-primary">{item.quantity}</span>
                                                     )}
                                                 </td>
-                                                <td className="text-right text-theme-secondary">LKR {item.price.toFixed(2)}</td>
+                                                <td className="text-center text-theme-secondary">{item.uom}</td>
+                                                <td className="text-right text-theme-secondary">LKR {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 <td className="text-right">
                                                     {!formData.salesOrderId ? (
                                                         <input
@@ -669,24 +852,10 @@ export default function DeliveryOrdersTab() {
                                                             className="w-24 bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
                                                         />
                                                     ) : (
-                                                        <span className="text-theme-secondary">LKR {item.discount.toFixed(2)}</span>
+                                                        <span className="text-theme-secondary">LKR {item.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     )}
                                                 </td>
-                                                <td className="text-right">
-                                                    {!formData.salesOrderId ? (
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="0.01"
-                                                            value={item.tax}
-                                                            onChange={(e) => handleUpdateItemTax(item.productId, parseFloat(e.target.value) || 0)}
-                                                            className="w-24 bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-primary text-right focus:outline-none focus:border-primary-500"
-                                                        />
-                                                    ) : (
-                                                        <span className="text-theme-secondary">LKR {item.tax.toFixed(2)}</span>
-                                                    )}
-                                                </td>
-                                                <td className="font-bold text-right text-theme-primary">LKR {item.total.toFixed(2)}</td>
+                                                <td className="font-bold text-right text-theme-primary">LKR {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 <td className="py-2 px-2 text-center">
                                                     <select
                                                         value={item.colorId || ''}
@@ -712,14 +881,24 @@ export default function DeliveryOrdersTab() {
                                                 </td>
                                                 {!formData.salesOrderId && (
                                                     <td className="text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveItem(item.productId)}
-                                                            className="p-2 hover:bg-theme-hover rounded-lg transition-colors"
-                                                            title="Remove Item"
-                                                        >
-                                                            <Trash2 className="w-4 h-4 text-red-400" />
-                                                        </button>
+                                                        <div className="flex justify-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleEditItem(index)}
+                                                                className="p-1.5 hover:bg-blue-500/20 rounded-lg transition-colors"
+                                                                title="Edit Item"
+                                                            >
+                                                                <Edit className="w-4 h-4 text-primary-500" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveItem(item.productId)}
+                                                                className="p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
+                                                                title="Remove Item"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 text-red-400" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 )}
                                             </tr>
@@ -731,7 +910,7 @@ export default function DeliveryOrdersTab() {
                                                 Subtotal:
                                             </td>
                                             <td className="font-semibold py-2 text-right text-theme-primary">
-                                                LKR {deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)}
+                                                LKR {deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -740,25 +919,27 @@ export default function DeliveryOrdersTab() {
                                                 Total Discount:
                                             </td>
                                             <td className="font-semibold text-yellow-400 py-2 text-right">
-                                                -LKR {deliveryItems.reduce((sum, item) => sum + item.discount, 0).toFixed(2)}
+                                                -LKR {deliveryItems.reduce((sum, item) => sum + item.discount, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
-                                        <tr>
-                                            <td colSpan={6} className="text-right font-semibold py-2 text-theme-secondary">
-                                                Total Tax:
-                                            </td>
-                                            <td className="font-semibold text-blue-400 py-2 text-right">
-                                                +LKR {deliveryItems.reduce((sum, item) => sum + item.tax, 0).toFixed(2)}
-                                            </td>
-                                            {!formData.salesOrderId && <td></td>}
-                                        </tr>
+                                        {formData.orderType === 'Tax' && (
+                                            <tr>
+                                                <td colSpan={6} className="text-right font-semibold py-2 text-theme-secondary">
+                                                    Total Tax:
+                                                </td>
+                                                <td className="font-semibold text-blue-400 py-2 text-right">
+                                                    +LKR {deliveryItems.reduce((sum, item) => sum + item.tax, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                                {!formData.salesOrderId && <td></td>}
+                                            </tr>
+                                        )}
                                         <tr className="border-t-2 border-theme-border">
                                             <td colSpan={6} className="text-right font-bold text-lg py-3 text-theme-primary">
                                                 Grand Total:
                                             </td>
                                             <td className="font-bold text-lg text-primary-400 py-3 text-right">
-                                                LKR {deliveryItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                                                LKR {deliveryItems.reduce((sum, item) => sum + (item.quantity * item.price - item.discount + (formData.orderType === 'Tax' ? item.tax : 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
                                             {!formData.salesOrderId && <td></td>}
                                         </tr>
@@ -808,7 +989,7 @@ export default function DeliveryOrdersTab() {
             <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Delivery Order Details">
                 {viewingDelivery && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <p className="text-sm text-theme-secondary">Delivery Number</p>
                                 <p className="font-semibold text-theme-primary">{viewingDelivery.deliveryNumber}</p>
@@ -864,7 +1045,7 @@ export default function DeliveryOrdersTab() {
                                     </div>
                                     <div>
                                         <p className="text-sm text-theme-secondary">Total Amount</p>
-                                        <p className="font-semibold text-green-400">LKR {parseFloat((viewingDelivery as any).SalesOrder.total).toFixed(2)}</p>
+                                        <p className="font-semibold text-green-400">LKR {parseFloat((viewingDelivery as any).SalesOrder.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-theme-secondary">Payment State</p>

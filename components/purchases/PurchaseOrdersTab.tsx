@@ -62,7 +62,7 @@ export default function PurchaseOrdersTab() {
                     total: parseFloat(item.total) || 0,
                 })) : []
             })));
-            setProducts(productsData.map((p: any) => ({
+            setProducts((productsData.data || []).map((p: any) => ({
                 ...p,
                 id: p.id.toString(),
                 price: parseFloat(p.price) || 0,

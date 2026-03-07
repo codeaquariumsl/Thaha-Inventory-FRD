@@ -47,7 +47,7 @@ export default function StockPage() {
                 createdAt: new Date(m.createdAt),
                 createdBy: m.User ? m.User.username : 'Unknown User'
             })));
-            setProducts(productsData.map((p: any) => ({
+            setProducts((productsData.data || []).map((p: any) => ({
                 ...p,
                 price: parseFloat(p.price) || 0,
                 cost: parseFloat(p.cost) || 0,

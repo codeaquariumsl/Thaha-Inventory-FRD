@@ -13,7 +13,12 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { error: 'API call failed' };
+        }
 
         if (errorData.error === 'Invalid or expired token') {
             if (typeof window !== 'undefined') {
@@ -26,11 +31,15 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         throw new Error(errorData.error || 'API call failed');
     }
 
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 }
 
 // Products
-export const getProducts = () => fetchAPI('/products');
+export const getProducts = (params: any = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchAPI(`/products${query ? `?${query}` : ''}`);
+};
 export const getProductById = (id: string) => fetchAPI(`/products/${id}`);
 export const createProduct = (data: any) => fetchAPI('/products', { method: 'POST', body: JSON.stringify(data) });
 export const updateProduct = (id: string, data: any) => fetchAPI(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });

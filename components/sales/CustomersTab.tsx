@@ -49,7 +49,15 @@ export default function CustomersTab() {
                 customerPrices: c.customerPrices || {},
                 createdAt: new Date(c.createdAt)
             })));
-            setProducts(prodData);
+            setProducts((prodData.data || []).map((p: any) => ({
+                ...p,
+                id: p.id.toString(),
+                price: parseFloat(p.price) || 0,
+                cost: parseFloat(p.cost) || 0,
+                stock: parseInt(p.stockQuantity) || 0,
+                reorderLevel: parseInt(p.reorderLevel) || 0,
+                category: p.Category ? p.Category.name : 'Uncategorized'
+            })));
         } catch (error) {
             console.error("Failed to load customers", error);
         }
