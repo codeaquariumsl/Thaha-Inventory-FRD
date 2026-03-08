@@ -197,7 +197,7 @@ export default function Home() {
                                         <p className="text-sm text-theme-secondary">{sale.orderNumber}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-theme-primary">LKR {(sale.total || 0)}</p>
+                                        <p className="font-bold text-theme-primary">{(sale.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                         <span className={`badge ${sale.status === 'Completed' ? 'badge-success' :
                                             (sale.status === 'Draft' || sale.status === 'Confirmed' || sale.status === 'Processing') ? 'badge-warning' : 'badge-danger'
                                             }`}>
@@ -226,7 +226,7 @@ export default function Home() {
                                         <p className="text-sm text-theme-secondary">{product.quantity} units sold</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-theme-primary">LKR {product.revenue.toFixed(2)}</p>
+                                        <p className="font-bold text-theme-primary">{product.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     </div>
                                 </div>
                             ))}

@@ -497,7 +497,7 @@ export default function ProductsPage() {
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-theme-secondary">Price:</span>
-                                            <span className="text-theme-primary font-bold">LKR {product.price.toFixed(2)}</span>
+                                            <span className="text-theme-primary font-bold">{product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-theme-secondary">Has Lid:</span>
@@ -583,7 +583,7 @@ export default function ProductsPage() {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-theme-primary">
-                                                    LKR {product.price.toFixed(2)}
+                                                    {product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-theme-primary">
                                                     {product.isHaveLid ? (

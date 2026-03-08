@@ -404,12 +404,12 @@ export default function SalesInvoicesTab() {
                     <thead>
                         <tr>
                             <th>Invoice Number</th>
+                            <th>Type</th>
                             <th>Customer</th>
+                            <th>Invoice Date</th>
                             <th>Total</th>
                             <th>Paid</th>
                             <th>Due</th>
-                            <th>Due Date</th>
-                            <th>Type</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -418,16 +418,16 @@ export default function SalesInvoicesTab() {
                         {filteredInvoices.map((invoice) => (
                             <tr key={invoice.id}>
                                 <td className="font-semibold">{invoice.invoiceNumber}</td>
-                                <td>{invoice.customerName}</td>
-                                <td className="font-bold">LKR {invoice.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                <td className="text-green-400">LKR {invoice.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                <td className="text-red-400">LKR {invoice.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                <td>{invoice.dueDate.toLocaleDateString()}</td>
                                 <td>
                                     <span className={`badge ${invoice.orderType === 'Tax' ? 'badge-accent' : 'badge-info'}`}>
                                         {invoice.orderType}
                                     </span>
                                 </td>
+                                <td>{invoice.customerName}</td>
+                                <td>{invoice.invoiceDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                <td className="font-bold text-right pr-6">{invoice.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td className="text-green-400 text-right pr-6">{invoice.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td className="text-red-400 text-right pr-6">{invoice.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td>
                                     <span className={`badge ${invoice.status === 'Paid' ? 'badge-success' :
                                         invoice.status === 'Partial' ? 'badge-info' :
